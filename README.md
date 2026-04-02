@@ -11,7 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-in%20development-1f6feb?style=flat-square">
   <img src="https://img.shields.io/badge/interface-terminal-30363d?style=flat-square">
-  <img src="https://img.shields.io/badge/platform-windows-30363d?style=flat-square">
+  <img src="https://img.shields.io/badge/platform-windows-1f6feb?style=flat-square">
   <img src="https://img.shields.io/badge/design-minimal-3fb950?style=flat-square">
   <img src="https://img.shields.io/badge/license-MIT-8b949e?style=flat-square">
 </p>
