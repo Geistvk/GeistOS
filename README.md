@@ -1,70 +1,89 @@
 # GeistOS
 
 <p align="center">
-  <img src="https://readme-typing-svg.demolab.com?font=Courier+Prime&size=22&duration=3000&pause=1000&color=E6E6E6&center=true&vCenter=true&width=600&lines=GeistOS;A+simple+terminal-based+operating+system;Minimal.+Clear.+Controllable." alt="Typing animation" />
+  <img src="https://readme-typing-svg.demolab.com?font=JetBrains+Mono&size=24&duration=2800&pause=800&color=58A6FF&center=true&vCenter=true&width=700&lines=GeistOS;Terminal-based+Operating+System;Minimal+by+design;Built+for+clarity+and+control" alt="Typing animation" />
 </p>
 
 <p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:1a1a1a,100:333333&height=120&section=header"/>
+  <img src="https://capsule-render.vercel.app/api?type=transparent&height=1"/>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/status-in%20development-1f6feb?style=flat-square">
+  <img src="https://img.shields.io/badge/interface-terminal-30363d?style=flat-square">
+  <img src="https://img.shields.io/badge/design-minimal-3fb950?style=flat-square">
+  <img src="https://img.shields.io/badge/license-MIT-8b949e?style=flat-square">
 </p>
 
 ---
 
-## Overview
+## GeistOS
 
-GeistOS is a small, terminal-based operating system built with a focus on clarity and simplicity.
+A minimal, terminal-based operating system focused on clarity, control, and simplicity.
 
-The goal is not to replicate a full modern operating system, but to provide a minimal environment that remains understandable at every level. Everything is intentionally kept direct and transparent.
+Instead of recreating the complexity of modern systems, GeistOS strips everything down to the essentials.  
+The result is an environment that remains readable, predictable, and easy to extend.
+
+---
+
+## Core Principles
+
+- Simplicity over abstraction  
+- Full transparency of system behavior  
+- Minimal footprint  
+- Direct interaction through the terminal  
 
 ---
 
 ## Features
 
-- Terminal-only interface
-- Minimal system design
-- Lightweight and fast
-- Easy to modify and extend
-- No graphical overhead
+- Command-line driven system  
+- Lightweight architecture  
+- Modular structure  
+- Easily extendable commands  
+- No graphical dependencies  
 
 ---
 
-## Getting Started
+## Quick Start
 
-Clone the repository:
-
+```bash
 git clone https://github.com/your-username/GeistOS.git
 cd GeistOS
-
-Run the system:
-
 python main.py
+```
 
 ---
 
-## Structure
+## Project Layout
 
+```
 GeistOS/
 │
-├── core/        system logic
-├── commands/    command handling
-├── utils/       helper functions
-└── main.py      entry point
+├── core/        # system internals
+├── commands/    # command definitions
+├── utils/       # shared utilities
+└── main.py      # entry point
+```
 
 ---
 
-## Philosophy
+## Design Approach
 
-GeistOS is built around a simple idea:
+GeistOS is built with a strict focus on readability.
 
-Keep everything understandable.
+Every component is written to be understood without digging through layers of abstraction.  
+There are no hidden mechanisms and no unnecessary complexity.
 
-There are no unnecessary abstractions, no hidden layers, and no complexity without purpose. Every part of the system can be followed and modified without friction.
+The system is intentionally small so that the entire codebase can be explored and modified without friction.
 
 ---
 
 ## Contributing
 
-Contributions are welcome. Open an issue or submit a pull request if you want to improve something.
+Contributions are open.
+
+If you have ideas, improvements, or fixes, feel free to open an issue or submit a pull request.
 
 ---
 
@@ -75,5 +94,5 @@ MIT License
 ---
 
 <p align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:333333,100:1a1a1a&height=120&section=footer"/>
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0d1117,100:1f6feb&height=120&section=footer"/>
 </p>
