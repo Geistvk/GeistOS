@@ -49,7 +49,7 @@ The result is an environment that remains readable, predictable, and easy to ext
 ## Quick Start
 
 ```bash
-git clone https://github.com/your-username/GeistOS.git
+git clone https://github.com/Geistvk/GeistOS.git
 cd GeistOS
 g++ GeistOS.cpp
 ```
