@@ -11,6 +11,7 @@
 <p align="center">
   <img src="https://img.shields.io/badge/status-in%20development-1f6feb?style=flat-square">
   <img src="https://img.shields.io/badge/interface-terminal-30363d?style=flat-square">
+  <img src="https://img.shields.io/badge/platform-windows-30363d?style=flat-square">
   <img src="https://img.shields.io/badge/design-minimal-3fb950?style=flat-square">
   <img src="https://img.shields.io/badge/license-MIT-8b949e?style=flat-square">
 </p>
@@ -60,10 +61,11 @@ python main.py
 ```
 GeistOS/
 │
-├── core/        # system internals
-├── commands/    # command definitions
-├── utils/       # shared utilities
-└── main.py      # entry point
+├── UIElements         # GUI framework
+├── include.zip        # all Dependencies
+├── VariadicTable.h    # lib for Ascii Tables
+├── lib.cpp            # lib for large Ascii
+└── GeistOS.cpp        # entry point
 ```
 
 ---
