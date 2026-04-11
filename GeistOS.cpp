@@ -12,9 +12,6 @@
 #include <imgui_impl_win32.h>
 #include <imgui_impl_dx11.h>
 
-#pragma comment(lib, "d3d11.lib")
-#pragma comment(lib, "user32.lib")
-
 #include <algorithm>
 #include <richedit.h>
 #include <regex>
@@ -1329,6 +1326,30 @@ void cmd_perm(const std::vector<std::string>& args, Terminal& term, std::string 
     }
 }
 
+struct EditOption {
+    std::string displayName;
+    std::string dbName;
+};
+
+std::vector<EditOption> editOptions = {
+    {"UserId", "userid"},
+    {"UserName", "name"},
+    {"PreName", "preName"},
+    {"LastName", "lastName"},
+    {"Password", "password"},
+    {"Created", "created"},
+    {"Rank", "rank"},
+    {"Rights", "userRights"}
+};
+
+std::vector<EditOption> rankOptions = {
+    {"Member", "1"},
+    {"Admin", "2"},
+    {"Owner", "3"},
+    {"Bot", "4"},
+    {"Tester", "5"}
+};
+
 // sudo required: User Befehler
 void cmd_user(const std::vector<std::string>& args, Terminal& term, std::string error = "none") {
     if (args[1] == "list") {
@@ -1400,30 +1421,27 @@ void cmd_user(const std::vector<std::string>& args, Terminal& term, std::string 
         std::getline(std::cin, created);
 
         std::string userRank;
-        std::cout << currentColor + "Available \033[0;33mRanks\033[0m: \n";
-        std::cout << currentColor + "   1. \033[1;36mMember\033[0m\n";
-        std::cout << currentColor + "   2. \033[1;36mAdmin\033[0m\n";
-        std::cout << currentColor + "   3. \033[1;36mOwner\033[0m\n";
-        std::cout << currentColor + "   4. \033[1;36mBot\033[0m\n";
-        std::cout << currentColor + "   5. \033[1;36mTester\033[0m\n";
-        std::cout << currentColor + "What should \033[1;32m" << userName << "s\033[0m \033[0;33mRank\033[0m be? (1-5): ";
-        std::getline(std::cin, userRank);
+        std::string userRankIndex;
 
-        if (userRank == "1") {
-            userRank = "Member";
-        } else if (userRank == "2") {
-            userRank = "Admin";
-        } else if (userRank == "3") {
-            userRank = "Owner";
-        } else if (userRank == "4") {
-            userRank = "Bot";
-        } else if (userRank == "5") {
-            userRank = "Tester";
-        } else {
-            std::string errorMsg = "\033[0;31mPlease only enter the Numbers 1-5!\033[0m";
+        std::cout << currentColor + "Available \033[0;33mRanks\033[0m: \n";
+
+        // Menü dynamisch generieren
+        for (size_t i = 0; i < rankOptions.size(); ++i) {
+            std::cout << currentColor << "   " << (i + 1)
+                    << ". \033[1;36m" << rankOptions[i].displayName << "\033[0m\n";
+        }
+
+        std::cout << currentColor + "What should \033[1;32m" << userName << "s\033[0m \033[0;33mRank\033[0m be? (1 - " << std::to_string(rankOptions.size()) << "): ";
+        std::getline(std::cin, userRankIndex);
+
+        // Eingabe prüfen
+        int choice = std::stoi(userRankIndex);
+        if (choice < 1 || choice > std::stoi(std::to_string(rankOptions.size()))) {
+            std::string errorMsg = "\033[0;31mPlease only enter the Numbers 1 - " + std::to_string(rankOptions.size()) + "!\033[0m";
             cmd_user(args, term, errorMsg);
             return;
         }
+        userRank = rankOptions[choice - 1].displayName;
 
         std::string userRights;
         std::cout << currentColor + "What \033[0;33mRights\033[0m should \033[1;32m" << userName << "\033[0m have?: ";
@@ -1489,7 +1507,7 @@ void cmd_user(const std::vector<std::string>& args, Terminal& term, std::string 
         userTable.print(std::cout << currentColor);
 
         std::string userName;
-        std::cout << currentColor + "What \033[1;32mUser\033[0m do you want to \033[0;33medit\033[0m?: ";
+        std::cout << currentColor + "What \033[1;32mUser\033[0m do you want to \033[0;33medit\033[0m? (Enter \033[1;32mUsername\033[0m): ";
         std::getline(std::cin, userName);
 
         if (users.find(userName) == users.end()) {
@@ -1500,47 +1518,22 @@ void cmd_user(const std::vector<std::string>& args, Terminal& term, std::string 
 
         std::string editNum;
         std::string editTitle;
+
         std::cout << currentColor + "What Data do you want to \033[0;33medit\033[0m?: \n";
-        std::cout << currentColor + "   1. \033[1;36mUserId\033[1;36m\n";
-        std::cout << currentColor + "   2. \033[1;36mUserName\033[1;36m\n";
-        std::cout << currentColor + "   3. \033[1;36mPreName\033[1;36m\n";
-        std::cout << currentColor + "   4. \033[1;36mLastName\033[1;36m\n";
-        std::cout << currentColor + "   5. \033[1;36mPassword\033[1;36m\n";
-        std::cout << currentColor + "   6. \033[1;36mCreated\033[1;36m\n";
-        std::cout << currentColor + "   7. \033[1;36mRank\033[1;36m\n";
-        std::cout << currentColor + "   8. \033[1;36mRights\033[1;36m\n";
-        std::cout << currentColor + "Choose one Number (1 - 8): ";
+
+        // Menü dynamisch generieren
+        for (size_t i = 0; i < editOptions.size(); ++i) {
+            std::cout << currentColor << "   " << (i + 1)
+                    << ". \033[1;36m" << editOptions[i].displayName << "\033[0m\n";
+        }
+
+        std::cout << currentColor << "Choose one Number (1 - " << editOptions.size() << "): ";
         std::getline(std::cin, editNum);
 
-        if (editNum == "1") {
-            editTitle = "UserId";
-            editNum = "userid";
-        } else if (editNum == "2") {
-            editTitle = "UserName";
-            editNum = "name";
-        } else if (editNum == "3") {
-            editTitle = "PreName";
-            editNum = "preName";
-        }else if (editNum == "4") {
-            editTitle = "LastName";
-            editNum = "lastName";
-        }else if (editNum == "5") {
-            editTitle = "Password";
-            editNum = "password";
-        }else if (editNum == "6") {
-            editTitle = "Created";
-            editNum = "created";
-        }else if (editNum == "7") {
-            editTitle = "Rank";
-            editNum = "rank";
-        }else if (editNum == "8") {
-            editTitle = "UserRights";
-            editNum = "userRights";
-        } else {
-            std::string errorMsg = "\033[0;31mPlease only enter the Numbers 1-8!\033[0m";
-            cmd_user(args, term, errorMsg);
-            return;
-        }
+        // Eingabe prüfen
+        int choice = std::stoi(editNum);
+        editTitle = editOptions[choice - 1].displayName;
+        editNum = editOptions[choice - 1].dbName;
 
         std::string userDataNew;
         std::cout << currentColor + "What should be the \033[0;33mNew\033[0m \033[1;32m" + editTitle + "\033[0m?: ";
@@ -1808,164 +1801,7 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
 
 
 
-// --------------------------------------------------
-// Forward declarations
-// --------------------------------------------------
-LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
-// --------------------------------------------------
-// Globals
-// --------------------------------------------------
-static ID3D11Device*            g_Device     = nullptr;
-static ID3D11DeviceContext*    g_Context    = nullptr;
-static IDXGISwapChain*         g_SwapChain  = nullptr;
-static ID3D11RenderTargetView* g_RTV        = nullptr;
-
-// --------------------------------------------------
-// DirectX setup
-// --------------------------------------------------
-bool CreateDeviceD3D(HWND hwnd)
-{
-    DXGI_SWAP_CHAIN_DESC sd{};
-    sd.BufferCount = 2;
-    sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    sd.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-    sd.OutputWindow = hwnd;
-    sd.SampleDesc.Count = 1;
-    sd.Windowed = TRUE;
-    sd.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-
-    return SUCCEEDED(
-        D3D11CreateDeviceAndSwapChain(
-            nullptr,
-            D3D_DRIVER_TYPE_HARDWARE,
-            nullptr,
-            0,
-            nullptr,
-            0,
-            D3D11_SDK_VERSION,
-            &sd,
-            &g_SwapChain,
-            &g_Device,
-            nullptr,
-            &g_Context
-        )
-    );
-}
-
-void CreateRenderTarget()
-{
-    ID3D11Texture2D* backBuffer = nullptr;
-    g_SwapChain->GetBuffer(0, IID_PPV_ARGS(&backBuffer));
-    g_Device->CreateRenderTargetView(backBuffer, nullptr, &g_RTV);
-    backBuffer->Release();
-}
-
-void CleanupDevice()
-{
-    if (g_RTV)       { g_RTV->Release(); g_RTV = nullptr; }
-    if (g_SwapChain){ g_SwapChain->Release(); g_SwapChain = nullptr; }
-    if (g_Context)  { g_Context->Release(); g_Context = nullptr; }
-    if (g_Device)   { g_Device->Release(); g_Device = nullptr; }
-}
-
-// --------------------------------------------------
-// Command Function
-// --------------------------------------------------
-void cmd_print(const std::vector<std::string>& args, Terminal& term)
-{
-    (void)args;
-    (void)term;
-
-    HINSTANCE hInst = GetModuleHandle(nullptr);
-
-    WNDCLASSEX wc{};
-    wc.cbSize = sizeof(WNDCLASSEX);
-    wc.style = CS_CLASSDC;
-    wc.lpfnWndProc = WndProc;
-    wc.hInstance = hInst;
-    wc.lpszClassName = L"ImGuiWin32";
-
-    RegisterClassEx(&wc);
-
-    HWND hwnd = CreateWindow(
-        wc.lpszClassName,
-        L"ImGui Win32 + DX11",
-        WS_OVERLAPPEDWINDOW,
-        100, 100, 800, 600,
-        nullptr, nullptr, hInst, nullptr
-    );
-
-    if (!CreateDeviceD3D(hwnd))
-        return;
-
-    ShowWindow(hwnd, SW_SHOWDEFAULT);
-    UpdateWindow(hwnd);
-    CreateRenderTarget();
-
-    // ---------------- ImGui setup ----------------
-    IMGUI_CHECKVERSION();
-    ImGui::CreateContext();
-    ImGui::StyleColorsDark();
-
-    ImGui_ImplWin32_Init(hwnd);
-    ImGui_ImplDX11_Init(g_Device, g_Context);
-
-    // ---------------- Main loop ----------------
-    MSG msg{};
-    while (msg.message != WM_QUIT)
-    {
-        if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
-        {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-            continue;
-        }
-
-        ImGui_ImplDX11_NewFrame();
-        ImGui_ImplWin32_NewFrame();
-        ImGui::NewFrame();
-
-        ImGui::Begin("Hello");
-        ImGui::Text("Hello World from Win32!");
-        ImGui::Button("Test Button");
-        ImGui::End();
-
-        ImGui::Render();
-
-        const float clearColor[4] = { 0.1f, 0.1f, 0.1f, 1.0f };
-        g_Context->OMSetRenderTargets(1, &g_RTV, nullptr);
-        g_Context->ClearRenderTargetView(g_RTV, clearColor);
-        ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
-        g_SwapChain->Present(1, 0);
-    }
-
-    // ---------------- Cleanup ----------------
-    ImGui_ImplDX11_Shutdown();
-    ImGui_ImplWin32_Shutdown();
-    ImGui::DestroyContext();
-
-    CleanupDevice();
-    DestroyWindow(hwnd);
-    UnregisterClass(wc.lpszClassName, hInst);
-}
-
-// --------------------------------------------------
-// Win32 Message Handler
-// --------------------------------------------------
-LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-    if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
-        return true;
-
-    if (msg == WM_DESTROY)
-    {
-        PostQuitMessage(0);
-        return 0;
-    }
-
-    return DefWindowProc(hWnd, msg, wParam, lParam);
-}
 
 
 
