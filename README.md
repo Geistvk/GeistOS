@@ -68,6 +68,25 @@ GeistOS/
 └── GeistOS.cpp        # entry point
 ```
 
+## Expandability
+
+In Order to add new commands to this code you just need the following code snippets.
+
+```code
+void commandFunction(const std::vector<std::string>& args, Terminal& term) {
+    //This will be executed when you type "yourCommandName"
+    //Do something here
+    std::cout << "Your Command executed successfully!";
+}
+
+//Expand main method on the bottom with this code
+terminal.registerCommand("yourCommandName", [&](const std::vector<std::string>& args) {
+    commandFunction(args, terminal);
+}, true, true, true, true);
+```
+
+---
+
 ---
 
 ## Design Approach
