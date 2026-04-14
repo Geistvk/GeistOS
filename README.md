@@ -108,8 +108,6 @@ Now you just need to type "yourCommandName" in the OS in the Terminal and it wil
 
 ---
 
----
-
 ## Design Approach
 
 GeistOS is built with a strict focus on readability.
