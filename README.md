@@ -93,12 +93,14 @@ terminal.registerCommand(
     [&](const std::vector<std::string>& args) {
         commandFunction(args, terminal);
     },
-    true,  // visible
-    true,  // enabled
-    true,  // requires arguments
-    true   // async execution
+    true,  // User needs read rights
+    true,  // User needs write rights
+    true,  // User needs execute rights
+    true   // User needs sudo rights
 );
 ```
+
+Now you just need to type "yourCommandName" in the OS in the Terminal and it will execute the function.
 
 ---
 
