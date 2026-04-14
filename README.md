@@ -70,20 +70,39 @@ GeistOS/
 
 ## Expandability
 
-In Order to add new commands to this code you just need the following code snippets.
+Adding new commands is simple and requires only two small steps.
 
-```code
+### 1. Create your command function
+
+```cpp
 void commandFunction(const std::vector<std::string>& args, Terminal& term) {
-    //This will be executed when you type "yourCommandName"
-    //Do something here
-    std::cout << "Your Command executed successfully!";
-}
+    // This function is executed when "yourCommandName" is entered
 
-//Expand main method on the bottom with this code
-terminal.registerCommand("yourCommandName", [&](const std::vector<std::string>& args) {
-    commandFunction(args, terminal);
-}, true, true, true, true);
+    // TODO: Add your custom logic here
+    std::cout << "Your command executed successfully!" << std::endl;
+}
 ```
+
+### 2. Register the command in `main`
+
+Add the following snippet at the end of your `main` function:
+
+```cpp
+terminal.registerCommand(
+    "yourCommandName",
+    [&](const std::vector<std::string>& args) {
+        commandFunction(args, terminal);
+    },
+    true,  // visible
+    true,  // enabled
+    true,  // requires arguments
+    true   // async execution
+);
+```
+
+---
+
+**Tip:** Keep your command logic modular by placing each command in its own function or file as your project grows.
 
 ---
 
