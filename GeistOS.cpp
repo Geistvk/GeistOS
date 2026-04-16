@@ -336,6 +336,8 @@ void idleMonitor()
     }
 }
 
+// Beispiel: globale Startzeit
+auto systemStart = std::chrono::steady_clock::now();
 std::string cmdLog = "";
 int cmdLogId = 1;
 
@@ -1720,11 +1722,46 @@ void addUpdate(std::string prefix, std::string color, std::string change) {
     std::cout << currentColor + "       \033[1;30m" + prefix + "\033[1;0m " + color + change + "\033[0m\n";
 }
 
+// =========================
+// Fake System States
+// =========================
+std::map<std::string, std::string> sysConfig = {
+    {"hostname", "GeistOS-PC"},
+    {"theme", "dark"},
+    {"version_channel", "stable"}
+};
+
+struct Task {
+    int pid;
+    std::string name;
+};
+
+std::vector<Task> tasks = {
+    {1, "init"},
+    {2, "terminal"},
+    {3, "ghost_anim"}
+};
+
+int nextPID = 4;
+
+// SHORTCUTS (oben definieren!)
+#define C_RESET "\033[0m"
+#define C_CMD "\033[1;34m"
+#define C_ERR "\033[1;31m"
+#define C_OK "\033[1;32m"
+#define C_WARN "\033[1;33m"
+#define C_TITLE "\033[1;35m"
+#define C_VAL "\033[0;36m"
+
 
 void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
 
     if (args.size() < 2) {
-        std::cout << currentColor + "Usage: \033[1;34msys [(version <history/cur>)]\033[0m\n";
+        std::cout << currentColor
+        << C_WARN << "Usage: " << C_CMD
+        << "sys [info/uptime/time/tasks/run/kill/mem/cpu/config/host/update/clearcache/bench]"
+        << C_RESET << "\n";
+        return;
     } else if (args[1] == "version") {
         if (args[2] == "history") {
             printScreen("Versions");
@@ -1775,19 +1812,221 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
         } else if (args[2] == "cur") {
             std::cout << currentColor + "\033[1;30mCurrent Version\033[1;0m: \033[0;37mGeistOS v\033[1;0m\033[0;35m" + curVersion + "\033[0;0m:\n";
         } else {
-            std::cout << currentColor + "Usage: \033[1;34msys version <history/cur>\033[0m\n";
+            std::cout << C_ERR << "Usage: " << C_CMD << "sys version <history/cur>" << C_RESET << "\n";
         }
     } else if (args[1] == "log") {
+
+        if (args.size() < 3) {
+            std::cout << C_ERR << "Usage: " << C_CMD << "sys log <show/clear>" << C_RESET << "\n";
+            return;
+        }
+
         if (args[2] == "show") {
             printScreen("CMD History");
             term.getCmdLog();
-        } else if (args[2] == "clear") {
-            term.clearCmdLog();
-        } else {
-            std::cout << currentColor + "Usage: \033[1;34msys log <show/clear>\033[0m\n";
         }
+
+        else if (args[2] == "clear") {
+            term.clearCmdLog();
+            std::cout << C_OK << "Log cleared." << C_RESET << "\n";
+        }
+    } else if (args[1] == "info") {
+        printScreen("System Info");
+
+        std::cout << C_WARN << "OS: " << C_VAL << "GeistOS\n";
+        std::cout << C_WARN << "Version: " << C_VAL << curVersion << "\n";
+        std::cout << C_WARN << "User: " << C_VAL << term.getCurrentUser() << "\n";
+        std::cout << C_WARN << "Hostname: " << C_VAL << sysConfig["hostname"] << C_RESET << "\n";
+    } else if (args[1] == "uptime") {
+        auto now = std::chrono::steady_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - systemStart);
+
+        std::cout << C_WARN << "Uptime: "
+                << C_VAL
+                << duration.count() / 3600 << "h "
+                << (duration.count() % 3600) / 60 << "m "
+                << duration.count() % 60 << "s"
+                << C_RESET << "\n";
+    } else if (args[1] == "time") {
+        std::time_t t = std::time(nullptr);
+        std::cout << C_WARN << "Current Time: " << C_VAL
+                << std::ctime(&t) << C_RESET;
+    } else if (args[1] == "tasks") {
+        printScreen("Running Tasks");
+
+        for (auto& t : tasks) {
+            std::cout << C_WARN << "PID: " << C_VAL << t.pid
+                    << C_WARN << " | " << C_VAL << t.name << "\n";
+        }
+    } else if (args[1] == "kill") {
+        if (args.size() < 3) {
+            std::cout << C_ERR << "Usage: " << C_CMD << "sys kill <pid>" << C_RESET << "\n";
+            return;
+        }
+
+        int pid = std::stoi(args[2]);
+
+        tasks.erase(
+            std::remove_if(tasks.begin(), tasks.end(),
+                [&](Task& t){ return t.pid == pid; }),
+            tasks.end()
+        );
+
+        std::cout << C_OK << "Process " << pid << " killed." << C_RESET << "\n";
+    } else if (args[1] == "run") {
+        if (args.size() < 3) {
+            std::cout << C_ERR << "Usage: " << C_CMD << "sys run <name>" << C_RESET << "\n";
+            return;
+        }
+
+        tasks.push_back({nextPID++, args[2]});
+        std::cout << C_OK << "Started task: " << C_VAL << args[2] << C_RESET << "\n";
+    } else if (args[1] == "mem") {
+        //Simulated Data (Not real)
+        int used = 512 + (rand() % 1024);
+        std::cout << C_WARN << "Memory: " << C_VAL << used << "MB / 2048MB" << C_RESET << "\n";
+    } else if (args[1] == "cpu") {
+        //Simulated Data (Not real)
+        std::cout << C_WARN << "CPU Usage: " << C_VAL << (rand() % 100) << "%" << C_RESET << "\n";
+    } else if (args[1] == "config") {
+        if (args.size() == 2) {
+            printScreen("System Config");
+
+            for (auto& c : sysConfig) {
+                std::cout 
+                    << C_WARN << std::setw(15) << std::left << c.first
+                    << C_RESET << " : "
+                    << C_VAL << c.second 
+                    << C_RESET << "\n";
+            }
+        } else if (args.size() >= 5 && args[2] == "set") {
+
+            std::string key = args[3];
+            std::string value = args[4];
+
+            if (sysConfig.find(key) == sysConfig.end()) {
+                std::cout 
+                    << C_ERR << "Unknown config key: "
+                    << C_CMD << key 
+                    << C_RESET << "\n";
+                return;
+            }
+
+            std::string oldValue = sysConfig[key];
+            sysConfig[key] = value;
+
+            std::cout 
+                << C_OK << "Updated "
+                << C_CMD << key 
+                << C_RESET << " ("
+                << C_VAL << oldValue 
+                << C_RESET << " -> "
+                << C_VAL << value 
+                << C_RESET << ")\n";
+        } else if (args.size() == 4 && args[2] == "get") {
+            std::string key = args[3];
+
+            if (sysConfig.find(key) != sysConfig.end()) {
+                std::cout 
+                    << C_WARN << key << " = "
+                    << C_VAL << sysConfig[key]
+                    << C_RESET << "\n";
+            } else {
+                std::cout << C_ERR << "Key not found" << C_RESET << "\n";
+            }
+        } else {
+            std::cout 
+                << C_ERR << "Invalid usage.\n"
+                << C_WARN << "Usage: " 
+                << C_CMD << "sys config [set <key> <value> | get <key>]\n"
+                << C_RESET;
+
+            std::cout 
+                << C_TITLE << "\nAvailable keys:\n" 
+                << C_RESET;
+
+            for (auto& c : sysConfig) {
+                std::cout << "  " << C_CMD << c.first << C_RESET << "\n";
+            }
+        }
+    } else if (args[1] == "host") {
+        if (args.size() < 3) {
+            std::cout << C_WARN << "Hostname"<< C_RESET << ": " << C_VAL << sysConfig["hostname"] << C_RESET << "\n";
+        } else {
+            sysConfig["hostname"] = args[2];
+            std::cout << C_WARN << "Hostname" << C_RESET << " changed to " << C_VAL << args[2] << C_RESET << "\n";
+        }
+    } else if (args[1] == "update") {
+        std::cout << C_WARN << "Checking for updates...\n";
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        std::cout << C_WARN << "Fetching Packages ...\n";
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        std::cout << C_WARN << "Installing Packages ...\n";
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        std::cout << C_OK << "System is up to date ✔" << C_RESET << "\n";
+    } else if (args[1] == "clearcache") {
+        std::cout << C_WARN << "Clearing cache..." << C_RESET << "\n";
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::cout << C_OK << "Done." << C_RESET << "\n";
+    } else if (args[1] == "bench") {
+        printScreen("Benchmark");
+
+        int limit = 100000000;
+
+        if (args.size() >= 3) {
+            try {
+                limit = std::stoi(args[2]);
+            } catch (...) {
+                std::cout << C_ERR << "Invalid Number" << C_RESET << ": "
+                        << C_CMD << args[2]
+                        << C_RESET << "\n";
+                std::cout << C_ERR << "Only enter Numbers (" << C_VAL << "1 - " << INT_MAX << C_ERR << ")" << C_RESET "\n";
+                return;
+            }
+        }
+
+        std::cout << C_WARN << "Running Benchmark\n" << "Iterations" << C_RESET << ": " << C_VAL << limit << C_RESET << "\n";
+
+        auto start = std::chrono::high_resolution_clock::now();
+
+        volatile int x = 0;
+        for (int i = 0; i < limit; i++) x++;
+
+        auto end = std::chrono::high_resolution_clock::now();
+        auto dur = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+        std::cout << C_WARN << "Benchmark Time: "
+                << C_VAL << dur.count() << " ms"
+                << C_RESET << "\n";
+        
+        std::cout << C_WARN << "Benchmark Time: "
+                << C_VAL << (((double) dur.count()) / 1000) << " s"
+                << C_RESET << "\n";
+    } else if (args[1] == "help") {
+        printScreen("sys Commands");
+
+        std::cout
+        << C_CMD  << "info        " << C_RESET << "- " << C_VAL << "system info\n"
+        << C_CMD  << "uptime      " << C_RESET << "- " << C_VAL << "show uptime\n"
+        << C_CMD  << "time        " << C_RESET << "- " << C_VAL << "current time\n"
+        << C_CMD  << "tasks       " << C_RESET << "- " << C_VAL << "list processes\n"
+        << C_CMD  << "run <name>  " << C_RESET << "- " << C_VAL << "start task\n"
+        << C_CMD  << "kill <pid>  " << C_RESET << "- " << C_VAL << "kill task\n"
+        << C_CMD  << "cpu         " << C_RESET << "- " << C_VAL << "cpu usage\n"
+        << C_CMD  << "mem         " << C_RESET << "- " << C_VAL << "memory usage\n"
+        << C_CMD  << "config      " << C_RESET << "- " << C_VAL << "show config\n"
+        << C_CMD  << "host        " << C_RESET << "- " << C_VAL << "show/set hostname\n"
+        << C_CMD  << "update      " << C_RESET << "- " << C_VAL << "system update\n"
+        << C_CMD  << "clearcache  " << C_RESET << "- " << C_VAL << "clear cache\n"
+        << C_CMD  << "bench       " << C_RESET << "- " << C_VAL << "performance test\n";
     } else {
-        std::cout << currentColor + "Usage: \033[1;34msys [(version <history/cur>)/(log <show/clear>)]\033[0m\n";
+        std::cout << C_ERR << "Unknown command.\n"
+                << C_WARN << "Usage: " << C_CMD
+                << "sys [info/uptime/time/tasks/run/kill/mem/cpu/config/host/update/clearcache/bench]"
+                << C_RESET << "\n";
     }
 }
 
