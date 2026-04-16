@@ -93,10 +93,10 @@ terminal.registerCommand(
     [&](const std::vector<std::string>& args) {
         commandFunction(args, terminal);
     },
-    true,  // User needs read rights
-    true,  // User needs write rights
-    true,  // User needs execute rights
-    true   // User needs sudo rights
+    false,  // User needs read rights
+    false,  // User needs write rights
+    false,  // User needs execute rights
+    false   // User needs sudo rights
 );
 ```
 
