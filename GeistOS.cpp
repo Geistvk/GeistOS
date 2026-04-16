@@ -1709,8 +1709,10 @@ void cmd_win(const std::vector<std::string>& args, Terminal& term) {
         for (auto item : p.items) delete item;
 }
 
+std::string curVersion;
 
 void addVersion(std::string version) {
+    curVersion = version;
     std::cout << currentColor + "   \033[0;37mGeistOS v\033[1;0m\033[0;35m" + version + "\033[0;0m:\n";
 }
 
@@ -1758,7 +1760,7 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
             addUpdate("Added", "\033[1;30m", "Spinning Ghost Idle Animation");
             addUpdate("Added", "\033[1;30m", "Early Versions of GeistOS GUI");
             addUpdate("Added", "\033[1;34m", "win");
-            addUpdate("Added", "\033[1;30m", "Letter Library for print Cmd");
+            addUpdate("Added", "\033[1;34m", "Letter Library for print Cmd");
             addUpdate("Added", "\033[1;34m", "print <word to print>");
             
             addVersion("0.0.0.5");
@@ -1768,8 +1770,9 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
             addUpdate("Added", "\033[1;34m", "sys log <show/clear>");
 
             addVersion("0.0.0.6");
+            addUpdate("Reworked", "\033[1;30m", "User Rank System");
+            addUpdate("Reworked", "\033[1;30m", "User Settings Menu");
         } else if (args[2] == "cur") {
-            std::string curVersion = "0.0.0.6";
             std::cout << currentColor + "\033[1;30mCurrent Version\033[1;0m: \033[0;37mGeistOS v\033[1;0m\033[0;35m" + curVersion + "\033[0;0m:\n";
         } else {
             std::cout << currentColor + "Usage: \033[1;34msys version <history/cur>\033[0m\n";
