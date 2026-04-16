@@ -567,6 +567,7 @@ void cmd_help(const std::vector<std::string>& args) {
     std::cout << currentColor + "  \033[1;34muser <list/add/edit/del/help>\033[0m (\033[1;36msudo\033[0m required)\n";
     std::cout << currentColor + "  \033[1;34mperm <list/edit/info/help>\033[0m (\033[1;36msudo\033[0m required)\n";
     std::cout << currentColor + "  \033[1;34mprint <word to print>\033[0m\n";
+    std::cout << currentColor + "  \033[1;34msys <info/uptime/time/tasks/run/kill/mem/cpu/config/host/update/clearcache/bench>\033[0m\n";
 }
 
 void cmd_clear(const std::vector<std::string>& args) {
@@ -1809,6 +1810,7 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
             addVersion("0.0.0.6");
             addUpdate("Reworked", "\033[1;30m", "User Rank System");
             addUpdate("Reworked", "\033[1;30m", "User Settings Menu");
+            addUpdate("Added", "\033[1;34m", "A lot of Features to the sys Command");
         } else if (args[2] == "cur") {
             std::cout << currentColor + "\033[1;30mCurrent Version\033[1;0m: \033[0;37mGeistOS v\033[1;0m\033[0;35m" + curVersion + "\033[0;0m:\n";
         } else {
@@ -2023,9 +2025,9 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
         << C_CMD  << "clearcache  " << C_RESET << "- " << C_VAL << "clear cache\n"
         << C_CMD  << "bench       " << C_RESET << "- " << C_VAL << "performance test\n";
     } else {
-        std::cout << C_ERR << "Unknown command.\n"
-                << C_WARN << "Usage: " << C_CMD
-                << "sys [info/uptime/time/tasks/run/kill/mem/cpu/config/host/update/clearcache/bench]"
+        std::cout << C_ERR << "Unknown command.\n" 
+                << C_WARN << "Usage: " 
+                << C_CMD << "sys [info/uptime/time/tasks/run/kill/mem/cpu/config/host/update/clearcache/bench]" 
                 << C_RESET << "\n";
     }
 }
