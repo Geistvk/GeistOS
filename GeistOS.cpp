@@ -6,6 +6,9 @@
 #include <unordered_map>
 #include <windows.h>
 
+#include <algorithm>
+#include <cctype>
+
 #include <dxgi.h>
 
 #include <imgui.h>
@@ -218,6 +221,27 @@ void printScreen(const std::string& text) {
     std::cout << std::endl; // EINMAL newline → fertig
 }
 
+static inline std::string ltrim(const std::string& s) {
+    size_t start = 0;
+    while (start < s.size() && std::isspace(static_cast<unsigned char>(s[start])))
+        start++;
+    return s.substr(start);
+}
+
+static inline std::string rtrim(const std::string& s) {
+    if (s.empty()) return s;
+
+    size_t end = s.size() - 1;
+    while (end > 0 && std::isspace(static_cast<unsigned char>(s[end])))
+        end--;
+
+    return s.substr(0, end + 1);
+}
+
+static inline std::string trim(const std::string& s) {
+    return rtrim(ltrim(s));
+}
+
 
 // Hilfsfunktion: Mapping von CMD-Farbcode zu ANSI
 std::string getAnsiColor(char code) {
@@ -355,7 +379,7 @@ public:
     }
 
     void registerCommand(const std::string& name,
-                         std::function<void(const std::vector<std::string>&)> func,
+                         std::function<std::string(const std::vector<std::string>&, const std::string&)> func,
                          bool requiresRead = false,
                          bool requiresWrite = false,
                          bool requiresExecute = false,
@@ -427,86 +451,155 @@ public:
 
 
         while (running) {
-            if (anyKeyPressed())
+            try
             {
-                lastInput = std::chrono::steady_clock::now();
+                std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-                // Animation abbrechen
-                if (animationRunning.load()) {
-                    stopAnimation = true;
-                    clearScreen();
-                    std::string prompt = "\033[1;32m" + currentUser->name + "@GeistOS\033[0m:\033[0;34m" + currentDictonary + "\033[0m$";
-                }
-            }
-
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            
-            if (currentColor != "\033[0;37m") {
-                std::string prompt = secColor + currentUser->name + "@GeistOS:" + currentDictonary + "$";
-                std::cout << currentColor + prompt;
-            } else {
-                std::string prompt = "\033[1;32m" + currentUser->name + "@GeistOS\033[0m:\033[0;34m" + currentDictonary + "\033[0m$";
-                std::cout << currentColor + prompt;
-            }
-            if (!std::getline(std::cin, input)) break;
-
-            auto tokens = split(input, ' ');
-            if (tokens.empty()) continue;
-
-            bool sudoMode = false;
-            if (tokens[0] == "sudo") {
-                sudoMode = true;
-                if (tokens.size() < 2) {
-                    std::cout << currentColor + "\033[1;36msudo\033[0m: no command specified\n";
-                    continue;
-                }
-                tokens.erase(tokens.begin());
-            }
-
-            auto it = commands.find(tokens[0]);
-            if (it != commands.end()) {
-                auto &cmd = it->second;
- 
-                if (cmd.requiresRead && !handleRights(currentUser -> userRights, 0)) {
-                    std::cout << currentColor + "Command \033[1;34m'" << tokens[0] << "'\033[0m requires \033[1;36mRead rights\033[0m\n";
-                    continue;
-                }
-                if (cmd.requiresWrite && !handleRights(currentUser -> userRights, 1)) {
-                    std::cout << currentColor + "Command \033[1;34m'" << tokens[0] << "'\033[0m requires \033[1;36mWrite rights\033[0m\n";
-                    continue;
-                }
-                if (cmd.requiresWrite && !handleRights(currentUser -> userRights, 2)) {
-                    std::cout << currentColor + "Command \033[1;34m'" << tokens[0] << "'\033[0m requires \033[1;36mExecute rights\033[0m\n";
-                    continue;
-                }
-                if (cmd.requiresSudo && !sudoMode) {
-                    std::cout << currentColor + "Command \033[1;34m'" << tokens[0] << "'\033[0m requires \033[1;36msudo\033[0m\n";
-                    continue;
-                }
-
-                if (sudoMode || cmd.requiresSudo) {
-                    if (!handleRights(currentUser -> userRights, 3)) {
-                        std::cout << currentColor + "User \033[1;32m'" << currentUser->name << "'\033[0m is not in the sudoers file\n";
-                        continue;
-                    }
-                    std::string pass;
-                    std::cout << currentColor + "[\033[1;36msudo\033[0m] Password for \033[1;32m" << currentUser->name << "\033[0m: ";
-                    pass = getHiddenInput();
-                    if (pass == currentUser->password) {
-                        cmdLog += "\033[1;33m" + std::to_string(cmdLogId) + "\033[1;0m. " + input + "\n";
-                        cmdLogId++;
-                        cmd.func(tokens);
-                    } else {
-                        std::cout << currentColor + "Sorry, try again.\n";
-                    }
+                // ---------------- PROMPT ----------------
+                std::string prompt;
+                if (currentColor != "\033[0;37m") {
+                    prompt = secColor + currentUser->name + "@GeistOS:" + currentDictonary + "$";
                 } else {
-                    cmdLog += "\033[1;33m" + std::to_string(cmdLogId) + "\033[1;0m. " + input + "\n";
-                    cmdLogId++;
-                    cmd.func(tokens);
+                    prompt = "\033[1;32m" + currentUser->name +
+                            "@GeistOS\033[0m:\033[0;34m" +
+                            currentDictonary + "\033[0m$";
                 }
 
-            } else {
-                std::cout << currentColor + "Unknown Command: \033[1;34m" << tokens[0] << "\033[0m\n";
+                std::cout << currentColor + prompt;
+
+                if (!std::getline(std::cin, input)) {
+                    std::cout << "\nInput stream closed\n";
+                    std::cin.clear();
+                    continue;
+                }
+
+                if (input.empty())
+                    continue;
+
+                if (input.size() > 50000) {
+                    std::cout << "Input too large\n";
+                    continue;
+                }
+
+                // ---------------- PIPELINE BUILD ----------------
+                std::vector<std::string> pipeline;
+                if (input.find('|') != std::string::npos)
+                    pipeline = split(input, '|');
+                else
+                    pipeline.push_back(input);
+
+                std::string pipeInput;
+                bool error = false;
+
+                // ---------------- PIPELINE EXECUTION ----------------
+                for (const auto& raw : pipeline)
+                {
+                    if (error)
+                        break;
+
+                    std::string segment = trim(raw);
+                    if (segment.empty())
+                        continue;
+
+                    auto tokens = split(segment, ' ');
+                    if (tokens.empty())
+                        continue;
+
+                    bool sudoMode = false;
+
+                    // -------- SUDO --------
+                    if (tokens[0] == "sudo") {
+                        if (tokens.size() < 2) {
+                            std::cout << "sudo: no command specified\n";
+                            error = true;
+                            break;
+                        }
+
+                        sudoMode = true;
+                        tokens.erase(tokens.begin());
+                    }
+
+                    // -------- LOOKUP --------
+                    auto it = commands.find(tokens[0]);
+                    if (it == commands.end()) {
+                        std::cout << "Unknown command: " << tokens[0] << "\n";
+                        error = true;
+                        break;
+                    }
+
+                    auto& cmd = it->second;
+
+                    // -------- RIGHTS --------
+                    if ((cmd.requiresRead && !handleRights(currentUser->userRights, 0)) ||
+                        (cmd.requiresWrite && !handleRights(currentUser->userRights, 1)) ||
+                        (cmd.requiresExecute && !handleRights(currentUser->userRights, 2)))
+                    {
+                        std::cout << "Permission denied\n";
+                        error = true;
+                        break;
+                    }
+
+                    std::string safeInput = pipeInput.substr(0, 10000);
+
+                    // -------- SUDO CHECK --------
+                    if (sudoMode || cmd.requiresSudo)
+                    {
+                        if (!handleRights(currentUser->userRights, 3)) {
+                            std::cout << "not in sudoers file\n";
+                            error = true;
+                            break;
+                        }
+
+                        std::cout << "[sudo] password: ";
+                        std::string pass = getHiddenInput();
+
+                        if (pass != currentUser->password) {
+                            std::cout << "Sorry, try again.\n";
+                            error = true;
+                            break;
+                        }
+                    }
+
+                    // -------- EXECUTION (MAX SAFE) --------
+                    std::string output;
+
+                    try {
+                        cmdLog += std::to_string(cmdLogId++) + ". " + segment + "\n";
+
+                        // zusätzlicher Schutzlayer
+                        output = cmd.func(tokens, safeInput);
+                    } catch (const std::bad_alloc&) {
+                        std::cout << "Memory overflow in command: " << tokens[0] << "\n";
+                        error = true;
+                        break;
+                    } catch (const std::exception& e) {
+                        std::cout << "Error in command: " << e.what() << "\n";
+                        error = true;
+                        break;
+                    } catch (...) {
+                        std::cout << "Command crashed: " << tokens[0] << "\n";
+                        error = true;
+                        break;
+                    }
+
+                    // -------- PIPE UPDATE --------
+                    pipeInput = output;
+
+                    if (pipeInput.size() > 200000) {
+                        std::cout << "Pipe overflow protection triggered\n";
+                        error = true;
+                        break;
+                    }
+                }
+
+                // ---------------- OUTPUT ----------------
+                /*if (!error && !pipeInput.empty()) {
+                    std::cout << pipeInput << std::endl;
+                }*/
+            } catch (const std::exception& e) {
+                std::cout << "Fatal loop error: " << e.what() << "\n";
+            } catch (...) {
+                std::cout << "Unknown fatal error in main loop\n";
             }
         }
     }
@@ -532,7 +625,7 @@ public:
 
 private:
     struct Command {
-        std::function<void(const std::vector<std::string>&)> func;
+        std::function<std::string(const std::vector<std::string>&, const std::string&)> func;
         bool requiresRead;
         bool requiresWrite;
         bool requiresExecute;
@@ -2064,79 +2157,172 @@ int main() {
     Terminal terminal;
 
     // normale Befehle
-    terminal.registerCommand("help", cmd_help);
-    terminal.registerCommand("clear", cmd_clear);
-    terminal.registerCommand("echo", cmd_echo);
-    terminal.registerCommand("ls", cmd_ls);
-    terminal.registerCommand("exit", [&](const std::vector<std::string>& args) {
-        (void)args;
-        std::cout << currentColor + "Stopping Terminal...\n";
-        terminal.stop();
-    });
+    terminal.registerCommand("help", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_help(args);
+            return "Command Run Successfull";
+        }, false, false, false
+    );
 
-    terminal.registerCommand("ping", [&](const std::vector<std::string>& args) {
-        cmd_ping(args);
-    }, false, false, true);
+    terminal.registerCommand("clear", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_clear(args);
+            return "Command Run Successfull";
+        }, false, false, false
+    );
 
-    terminal.registerCommand("dir", [&](const std::vector<std::string>& args) {
-        cmd_dir(args);
-    }, true);
+    terminal.registerCommand("echo", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_echo(args);
+            return "Command Run Successfull";
+        }, false, false, false
+    );
 
-    terminal.registerCommand("cd", [&](const std::vector<std::string>& args) {
-        cmd_cd(args);
-    }, true, false, false);
+    terminal.registerCommand("ls", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_ls(args);
+            return "Command Run Successfull";
+        }, false, false, false
+    );
 
-    terminal.registerCommand("mkdir", [&](const std::vector<std::string>& args) {
-        cmd_mkdir(args);
-    }, false, true);
+    terminal.registerCommand("exit",
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input; (void)args; (void)input;
+            std::cout << currentColor + "Stopping Terminal...\n";
+            terminal.stop();
+            return "";
+        }
+    );
 
-    terminal.registerCommand("rm", [&](const std::vector<std::string>& args) {
-        cmd_rm(args);
-    }, true);
+    terminal.registerCommand("ping", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_ping(args);
+            return "Command Run Successfull";
+        }, false, false, true
+    );
 
-    terminal.registerCommand("touch", [&](const std::vector<std::string>& args) {
-        cmd_touch(args);
-    }, true, true);
+    terminal.registerCommand("dir", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_dir(args);
+            return "Command Run Successfull";
+        }, true
+    );
 
-    terminal.registerCommand("vim", [&](const std::vector<std::string>& args) {
-        cmd_vim(args);
-    }, true, true);
+    terminal.registerCommand("cd", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_cd(args);
+            return "Command Run Successfull";
+        }, true, false, false
+    );
 
-    terminal.registerCommand("apt", [&](const std::vector<std::string>& args) {
-        cmd_apt_install(args);
-    }, true, true, false, true);
+    terminal.registerCommand("mkdir", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_mkdir(args);
+            return "Command Run Successfull";
+        }, false, true
+    );
+
+    terminal.registerCommand("rm", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_rm(args);
+            return "Command Run Successfull";
+        }, true
+    );
+
+    terminal.registerCommand("touch", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_touch(args);
+            return "Command Run Successfull";
+        }, true, true
+    );
+
+    terminal.registerCommand("vim", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_vim(args);
+            return "Command Run Successfull";
+        }, true, true
+    );
+
+    terminal.registerCommand("apt", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_apt_install(args);
+            return "Command Run Successfull";
+        }, true, true, false, true
+    );
 
     //color changer
-    terminal.registerCommand("color", [&](const std::vector<std::string>& args) {
-        cmd_color(args);
-    });
+    terminal.registerCommand("color", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_color(args);
+            return "Command Run Successfull";
+        }
+    );
 
-    terminal.registerCommand("passwd", [&](const std::vector<std::string>& args) {
-        cmd_passwd(args, terminal);
-    }, true, true, true, true);
+    terminal.registerCommand("passwd", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_passwd(args, terminal);
+            return "Command Run Successfull";
+        }, true, true, true, true
+    );
 
     // permission management commands (sudo required)
-    terminal.registerCommand("perm", [&](const std::vector<std::string>& args) {
-        cmd_perm(args, terminal);
-    }, true, true, true, true);
+    terminal.registerCommand("perm", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_perm(args, terminal);
+            return "Command Run Successfull";
+        }, true, true, true, true
+    );
 
     // user management commands (sudo required)
-    terminal.registerCommand("user", [&](const std::vector<std::string>& args) {
-        cmd_user(args, terminal);
-    }, true, true, true, true);
+    terminal.registerCommand("user", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_user(args, terminal);
+            return "Command Run Successfull";
+        }, 
+        true, true, true, true
+    );
     // Read Write Execute Sudo
 
-    terminal.registerCommand("print", [&](const std::vector<std::string>& args) {
-        cmd_print(args, terminal);
-    }, true, true);
+    terminal.registerCommand("print", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_print(args, terminal);
+            return "Command Run Successfull";
+        }, 
+        true, true
+    );
 
-    terminal.registerCommand("win", [&](const std::vector<std::string>& args) {
-        cmd_win(args, terminal);
-    });
+    terminal.registerCommand("win", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_win(args, terminal);
+            return "Command Run Successfull";
+        }
+    );
 
-    terminal.registerCommand("sys", [&](const std::vector<std::string>& args) {
-        cmd_sys(args, terminal);
-    });
+    terminal.registerCommand("sys", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_sys(args, terminal);
+            return "Command Run Successfull";
+        }
+    );
 
     // === Login beim Start ===
     while (!terminal.loginPrompt()) {}
