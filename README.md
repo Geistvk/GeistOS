@@ -90,8 +90,10 @@ Add the following snippet at the end of your `main` function:
 ```cpp
 terminal.registerCommand(
     "yourCommandName",
-    [&](const std::vector<std::string>& args) {
+    [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+        (void)input;
         commandFunction(args, terminal);
+        return "Command Run Successfull";
     },
     false,  // User needs read rights
     false,  // User needs write rights
