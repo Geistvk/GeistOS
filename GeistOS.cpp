@@ -45,6 +45,8 @@
 #include <chrono>
 #include <thread>
 
+#include <ctime>
+
 #include <cstdio>
 #include <memory>
 #include <atomic>
@@ -639,28 +641,84 @@ private:
     User* currentUser = nullptr;
 };
 
+class Help {
+    private: 
+        int maxPerLine = 4;
+
+    public:
+        std::string standard = getAnsiColor('8');
+        std::string textColor1 = getAnsiColor('1');
+        std::string textColor2 = getAnsiColor('3');
+        std::string sudoColor = getAnsiColor('B');
+
+        void printStandardCmds(std::vector<std::string> cmds) {
+            for (size_t i = 0; i < cmds.size(); i++) {
+                if (i == 0) std::cout << "  ";
+                if (i != 0 && (i % maxPerLine) == 0) {
+                    std::cout << "\n  ";
+                }
+
+                std::cout << textColor1 << cmds[i];
+
+                if (i < cmds.size() - 1 && ((i + 1) % maxPerLine) != 0) {
+                    std::cout << standard << ", ";
+                }
+            }
+            std::cout << "\n";
+        }
+
+        void printHelp(std::string cmd, std::vector<std::string> list, boolean sudo = false, std::string suffix = "") {
+            if ((int) list.size() > 0) {
+                std::cout << textColor1 + "  " << cmd << " " << standard << "<";
+
+                for (int i = 0; i < (int)list.size(); i++) {
+                    std::cout << textColor2 << list[i];
+
+                    if (i < (int)list.size() - 1) {
+                        std::cout << standard << "/";
+                    }
+                }
+
+                std::cout << standard + ">";
+            } else {
+                std::cout << textColor1 + "  " << cmd;
+            }
+            if (!sudo && suffix != "") std::cout << standard << " " << suffix << "\n";
+            else if (!sudo && suffix == "") std::cout << standard<< "\n";
+            else if (sudo && suffix != "") std::cout << standard << " " << suffix << " (" << sudoColor << "sudo" << standard << " required)\n";
+            else if (sudo && suffix == "") std::cout << standard << " (" << sudoColor << "sudo" << standard << " required)\n";
+        }
+};
+
+Help help;
+
 // ==========================
 // Befehle
 // ==========================
 void cmd_help(const std::vector<std::string>& args) {
     (void)args;
+
+    std::string standard = help.standard;
+    std::string textColor1 = help.textColor1;
+    std::string sudoColor = help.sudoColor;
+
     printScreen("Help");
     std::cout << currentColor + "Available Commands:\n";
-    std::cout << currentColor + "  \033[1;34mhelp\033[0m, \033[1;34mclear\033[0m, \033[1;34mecho\033[0m, \033[1;34mls\033[0m, \033[1;34mexit\033[0m\n";
-    std::cout << currentColor + "  \033[1;34mping <ip>\033[0m\n";
-    std::cout << currentColor + "  \033[1;34mdir /s\033[0m\n";
-    std::cout << currentColor + "  \033[1;34mapt update/install <Package>\033[0m (\033[1;36msudo\033[0m required)\n";
-    std::cout << currentColor + "  \033[1;34mcd <Folder Path or Folder Name>\033[0m\n";
-    std::cout << currentColor + "  \033[1;34mmkdir <Folder Name>\033[0m\n";
-    std::cout << currentColor + "  \033[1;34mrm <filename|foldername>\033[0m (\033[1;36msudo\033[0m required)\n";
-    std::cout << currentColor + "  \033[1;34mtouch <File Name>\033[0m\n";
-    std::cout << currentColor + "  \033[1;34mvim <File Name>\033[0m\n";
-    std::cout << currentColor + "  \033[1;34mcolor <hex-code>\033[0m (0-F) {7 = default}\n";
-    std::cout << currentColor + "  \033[1;34mpasswd\033[0m (\033[1;36msudo\033[0m required)\n";
-    std::cout << currentColor + "  \033[1;34muser <list/add/edit/del/help>\033[0m (\033[1;36msudo\033[0m required)\n";
-    std::cout << currentColor + "  \033[1;34mperm <list/edit/info/help>\033[0m (\033[1;36msudo\033[0m required)\n";
-    std::cout << currentColor + "  \033[1;34mprint <word to print>\033[0m\n";
-    std::cout << currentColor + "  \033[1;34msys <info/uptime/time/tasks/run/kill/mem/cpu/config/host/update/clearcache/bench>\033[0m\n";
+    help.printStandardCmds({"help", "clear", "echo", "ls", "exit", "logout", "date"});
+    help.printHelp("ping", {"ip"});
+    help.printHelp("dir /s", {});
+    help.printHelp("apt update" + standard + "/" + textColor1 + "install", {"Package"}, true);
+    help.printHelp("cd", {"Folder Path", "Folder Name"});
+    help.printHelp("mkdir", {"Folder Name"});
+    help.printHelp("rm", {"filename", "foldername"}, true);
+    help.printHelp("touch", {"File Name"});
+    help.printHelp("vim", {"File Name"});
+    help.printHelp("color", {"hex-code"}, false, "(0-F) {7 = default}");
+    help.printHelp("passwd", {}, true);
+    help.printHelp("user", {"list", "add", "edit", "del", "help"}, true);
+    help.printHelp("perm", {"list", "edit", "info", "help"}, true);
+    help.printHelp("print", {"word to print"});
+    help.printHelp("sys", {"info", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "config", "host", "update", "clearcache", "bench"});
 }
 
 void cmd_clear(const std::vector<std::string>& args) {
@@ -1805,6 +1863,87 @@ void cmd_win(const std::vector<std::string>& args, Terminal& term) {
         for (auto item : p.items) delete item;
 }
 
+void cmd_date(const std::vector<std::string>& args, Terminal& term) {
+    (void) args; (void) term;
+    auto now = std::chrono::system_clock::now();
+    std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
+    std::tm *ltm = std::localtime(&currentTime);
+
+    const std::string RESET  = "\033[0m";
+    const std::string TITLE  = "\033[1;37m";
+    const std::string BORDER = "\033[1;36m";
+    const std::string LABEL  = "\033[1;34m";
+    const std::string VALUE  = "\033[1;32m";
+    const std::string DIM    = "\033[2m";
+
+    const char* weekdays[] = {
+        "Sonntag","Montag","Dienstag",
+        "Mittwoch","Donnerstag","Freitag","Samstag"
+    };
+
+    std::ostringstream date, time;
+    date << (1900 + ltm->tm_year) << "-"
+         << std::setfill('0') << std::setw(2) << (1 + ltm->tm_mon) << "-"
+         << std::setw(2) << ltm->tm_mday;
+
+    time << std::setfill('0')
+         << std::setw(2) << ltm->tm_hour << ":"
+         << std::setw(2) << ltm->tm_min  << ":"
+         << std::setw(2) << ltm->tm_sec;
+
+    const int W = 50;
+
+    auto line = [&](char left, char fill, char right) {
+        std::cout << BORDER << left << std::string(W - 2, fill) << right << RESET << "\n";
+    };
+
+    auto row = [&](const std::string& l, const std::string& v) {
+        std::ostringstream out;
+        out << " " << LABEL << std::left << std::setw(18) << l << RESET
+            << " " << VALUE << std::left << std::setw(27) << v << RESET << " ";
+        std::string s = out.str();
+        if ((int)s.size() < W - 2) s += std::string(W - 2 - s.size(), ' ');
+        std::cout << BORDER << "|" << RESET << s << BORDER << "|" << RESET << "\n";
+    };
+
+    line('+','-','+');
+
+    std::string title = " Current Date ";
+    int pad = (W - 2 - (int)title.size()) / 2;
+    std::cout << BORDER << "|"
+              << std::string(pad, ' ')
+              << TITLE << title << RESET
+              << std::string(W - 2 - pad - title.size(), ' ')
+              << BORDER << "|" << RESET << "\n";
+
+    line('+','-','+');
+
+    row("Datum", date.str());
+    row("Uhrzeit", time.str());
+    row("Wochentag", weekdays[ltm->tm_wday] + std::string(" (") + std::to_string(ltm->tm_wday) + ")");
+
+    line('+','-','+');
+
+    row("Jahr", std::to_string(1900 + ltm->tm_year));
+    row("Monat", std::to_string(1 + ltm->tm_mon));
+    row("Tag", std::to_string(ltm->tm_mday));
+    row("Tag im Jahr", std::to_string(ltm->tm_yday));
+
+    line('+','-','+');
+    
+    row("Stunde", std::to_string(ltm->tm_hour));
+    row("Minute", std::to_string(ltm->tm_min));
+    row("Sekunde", std::to_string(ltm->tm_sec));
+    
+    line('+','-','+');
+    
+    row("Sommerzeit", ltm->tm_isdst ? "Ja (1)" : "Nein (0)");
+
+    line('+','-','+');
+
+    std::cout << DIM << "Wochentag: 0=Sonntag, 6=Samstag" << RESET << "\n";
+}
+
 std::string curVersion;
 
 void addVersion(std::string version) {
@@ -1838,7 +1977,6 @@ std::vector<Task> tasks = {
 
 int nextPID = 4;
 
-// SHORTCUTS (oben definieren!)
 #define C_RESET "\033[0m"
 #define C_CMD "\033[1;34m"
 #define C_ERR "\033[1;31m"
@@ -1904,6 +2042,10 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
             addUpdate("Reworked", "\033[1;30m", "User Rank System");
             addUpdate("Reworked", "\033[1;30m", "User Settings Menu");
             addUpdate("Added", "\033[1;34m", "A lot of Features to the sys Command");
+            addUpdate("Info", "\033[1;30m", "Type 'sys help' to see all features");
+            addUpdate("Added", "\033[1;34m", "Pipes that run multiple commands at once");
+            addUpdate("Reworked", "\033[1;30m", "The Help Screen with fresh colors and new Backend");
+            addUpdate("Added", "\033[1;34m", "The Date Command with a beautiful Table View");
         } else if (args[2] == "cur") {
             std::cout << currentColor + "\033[1;30mCurrent Version\033[1;0m: \033[0;37mGeistOS v\033[1;0m\033[0;35m" + curVersion + "\033[0;0m:\n";
         } else {
@@ -1926,11 +2068,14 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
             std::cout << C_OK << "Log cleared." << C_RESET << "\n";
         }
     } else if (args[1] == "info") {
+        curVersion = "0.0.0.6";
+        auto user = term.getCurrentUser();
         printScreen("System Info");
 
         std::cout << C_WARN << "OS: " << C_VAL << "GeistOS\n";
         std::cout << C_WARN << "Version: " << C_VAL << curVersion << "\n";
-        std::cout << C_WARN << "User: " << C_VAL << term.getCurrentUser() << "\n";
+        std::cout << C_WARN << "Username: " << C_VAL << user->name << "\n";
+        std::cout << C_WARN << "User: " << C_VAL << user->preName << " " << user->lastName << "\n";
         std::cout << C_WARN << "Hostname: " << C_VAL << sysConfig["hostname"] << C_RESET << "\n";
     } else if (args[1] == "uptime") {
         auto now = std::chrono::steady_clock::now();
@@ -2161,7 +2306,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_help(args);
-            return "Command Run Successfull";
+            return "";
         }, false, false, false
     );
 
@@ -2169,7 +2314,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_clear(args);
-            return "Command Run Successfull";
+            return "";
         }, false, false, false
     );
 
@@ -2177,7 +2322,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_echo(args);
-            return "Command Run Successfull";
+            return "";
         }, false, false, false
     );
 
@@ -2185,7 +2330,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_ls(args);
-            return "Command Run Successfull";
+            return "";
         }, false, false, false
     );
 
@@ -2198,11 +2343,20 @@ int main() {
         }
     );
 
+    terminal.registerCommand("logout", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input; (void)args;
+            while (!terminal.loginPrompt()) {}
+            terminal.run();
+            return "";
+        }
+    );
+
     terminal.registerCommand("ping", 
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_ping(args);
-            return "Command Run Successfull";
+            return "";
         }, false, false, true
     );
 
@@ -2210,7 +2364,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_dir(args);
-            return "Command Run Successfull";
+            return "";
         }, true
     );
 
@@ -2218,7 +2372,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_cd(args);
-            return "Command Run Successfull";
+            return "";
         }, true, false, false
     );
 
@@ -2226,7 +2380,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_mkdir(args);
-            return "Command Run Successfull";
+            return "";
         }, false, true
     );
 
@@ -2234,7 +2388,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_rm(args);
-            return "Command Run Successfull";
+            return "";
         }, true
     );
 
@@ -2242,7 +2396,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_touch(args);
-            return "Command Run Successfull";
+            return "";
         }, true, true
     );
 
@@ -2250,7 +2404,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_vim(args);
-            return "Command Run Successfull";
+            return "";
         }, true, true
     );
 
@@ -2258,7 +2412,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_apt_install(args);
-            return "Command Run Successfull";
+            return "";
         }, true, true, false, true
     );
 
@@ -2267,7 +2421,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_color(args);
-            return "Command Run Successfull";
+            return "";
         }
     );
 
@@ -2275,7 +2429,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_passwd(args, terminal);
-            return "Command Run Successfull";
+            return "";
         }, true, true, true, true
     );
 
@@ -2284,7 +2438,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_perm(args, terminal);
-            return "Command Run Successfull";
+            return "";
         }, true, true, true, true
     );
 
@@ -2293,7 +2447,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_user(args, terminal);
-            return "Command Run Successfull";
+            return "";
         }, 
         true, true, true, true
     );
@@ -2303,7 +2457,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_print(args, terminal);
-            return "Command Run Successfull";
+            return "";
         }, 
         true, true
     );
@@ -2312,7 +2466,15 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_win(args, terminal);
-            return "Command Run Successfull";
+            return "";
+        }
+    );
+
+    terminal.registerCommand("date", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_date(args, terminal);
+            return "";
         }
     );
 
@@ -2320,7 +2482,7 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_sys(args, terminal);
-            return "Command Run Successfull";
+            return "";
         }
     );
 
