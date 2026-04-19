@@ -362,7 +362,6 @@ void idleMonitor()
     }
 }
 
-// Beispiel: globale Startzeit
 auto systemStart = std::chrono::steady_clock::now();
 std::string cmdLog = "";
 int cmdLogId = 1;
@@ -371,6 +370,21 @@ int cmdLogId = 1;
 // Terminal-Klasse 
 // ==========================
 class Terminal {
+private:
+    struct Command {
+        std::function<std::string(const std::vector<std::string>&, const std::string&)> func;
+        bool requiresRead;
+        bool requiresWrite;
+        bool requiresExecute;
+        bool requiresSudo;
+    };
+
+    bool running = true;
+    std::map<std::string, Command> commands;
+
+    std::string error = "none";
+    std::unordered_map<std::string, User> users;
+    User* currentUser = nullptr;
 public:
     Terminal() {
         users["root"] = {0, "Root", "Root", "root", "root123", "2024", "Owner", "1111"};
@@ -397,9 +411,9 @@ public:
         }
     }
 
-    bool loginPrompt(std::string error = "none") {
+    bool loginPrompt() {
         SetConsoleTitleA("Geist OS");
-        
+
         std::string username, password;
 
         system("cls");
@@ -412,31 +426,32 @@ public:
         std::cout << currentColor + "\033[0;36m======\033[0m GeistOS Login \033[0;36m======\033[0m\n";
         std::cout << currentColor + "Admin Username:       root\n";
         std::cout << currentColor + "Admin User Password:  root123\n\n";
-        std::cout << currentColor + "\033[1;32m" << "Username\033[0m: ";
+
+        std::cout << currentColor + "\033[1;32mUsername\033[0m: ";
         std::getline(std::cin, username);
 
         if (users.find(username) == users.end()) {
-            std::string wrongPwd = "\033[0;31mUsername incorrect.\033[0m\n";
-            loginPrompt(wrongPwd);
+            error = "\033[0;31mUsername incorrect.\033[0m\n";
             return false;
         }
 
-        std::cout << currentColor + "\033[1;32m" << "Password\033[0m: ";
+        std::cout << currentColor + "\033[1;32mPassword\033[0m: ";
         password = getHiddenInput();
 
         if (users[username].password == password) {
             #if defined(_WIN32)
-                        system("cls");
+                system("cls");
             #else
-                        system("clear");
+                system("clear");
             #endif
+
             currentUser = &users[username];
             printScreen("Geist OS");
+
             std::cout << currentColor + "Welcome, \033[1;32m" << username << "\033[0m!\n\n";
             return true;
         } else {
-            std::string wrongPwd = "\033[0;31mPassword incorrect.\033[0m\n";
-            loginPrompt(wrongPwd);
+            error = "\033[0;31mPassword incorrect.\033[0m\n";
             return false;
         }
     }
@@ -457,7 +472,6 @@ public:
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-                // ---------------- PROMPT ----------------
                 std::string prompt;
                 if (currentColor != "\033[0;37m") {
                     prompt = secColor + currentUser->name + "@GeistOS:" + currentDictonary + "$";
@@ -483,7 +497,6 @@ public:
                     continue;
                 }
 
-                // ---------------- PIPELINE BUILD ----------------
                 std::vector<std::string> pipeline;
                 if (input.find('|') != std::string::npos)
                     pipeline = split(input, '|');
@@ -493,7 +506,6 @@ public:
                 std::string pipeInput;
                 bool error = false;
 
-                // ---------------- PIPELINE EXECUTION ----------------
                 for (const auto& raw : pipeline)
                 {
                     if (error)
@@ -509,7 +521,6 @@ public:
 
                     bool sudoMode = false;
 
-                    // -------- SUDO --------
                     if (tokens[0] == "sudo") {
                         if (tokens.size() < 2) {
                             std::cout << "sudo: no command specified\n";
@@ -521,7 +532,6 @@ public:
                         tokens.erase(tokens.begin());
                     }
 
-                    // -------- LOOKUP --------
                     auto it = commands.find(tokens[0]);
                     if (it == commands.end()) {
                         std::cout << "Unknown command: " << tokens[0] << "\n";
@@ -531,7 +541,6 @@ public:
 
                     auto& cmd = it->second;
 
-                    // -------- RIGHTS --------
                     if ((cmd.requiresRead && !handleRights(currentUser->userRights, 0)) ||
                         (cmd.requiresWrite && !handleRights(currentUser->userRights, 1)) ||
                         (cmd.requiresExecute && !handleRights(currentUser->userRights, 2)))
@@ -543,7 +552,6 @@ public:
 
                     std::string safeInput = pipeInput.substr(0, 10000);
 
-                    // -------- SUDO CHECK --------
                     if (sudoMode || cmd.requiresSudo)
                     {
                         if (!handleRights(currentUser->userRights, 3)) {
@@ -562,13 +570,11 @@ public:
                         }
                     }
 
-                    // -------- EXECUTION (MAX SAFE) --------
                     std::string output;
 
                     try {
                         cmdLog += std::to_string(cmdLogId++) + ". " + segment + "\n";
 
-                        // zusätzlicher Schutzlayer
                         output = cmd.func(tokens, safeInput);
                     } catch (const std::bad_alloc&) {
                         std::cout << "Memory overflow in command: " << tokens[0] << "\n";
@@ -584,7 +590,6 @@ public:
                         break;
                     }
 
-                    // -------- PIPE UPDATE --------
                     pipeInput = output;
 
                     if (pipeInput.size() > 200000) {
@@ -594,7 +599,6 @@ public:
                     }
                 }
 
-                // ---------------- OUTPUT ----------------
                 /*if (!error && !pipeInput.empty()) {
                     std::cout << pipeInput << std::endl;
                 }*/
@@ -624,73 +628,292 @@ public:
             currentUser = &users[name];
         }
     }
+};
 
-private:
-    struct Command {
-        std::function<std::string(const std::vector<std::string>&, const std::string&)> func;
-        bool requiresRead;
-        bool requiresWrite;
-        bool requiresExecute;
-        bool requiresSudo;
+
+
+class ConsoleWindow {
+public: 
+    struct Row {
+        std::string label;
+        std::string value;
     };
 
-    bool running = true;
-    std::map<std::string, Command> commands;
+    struct Section {
+        std::string title;
+        std::vector<Row> rows;
+    };
 
-    std::unordered_map<std::string, User> users;
-    User* currentUser = nullptr;
+    ConsoleWindow(int w, const std::string& t) : minWidth(w), title(t) {}
+
+    void addSection(const std::string& sectionTitle = "") {
+        sections.push_back({sectionTitle, {}});
+    }
+
+    void addRow(const std::string& label, const std::string& value) {
+        if (sections.empty()) addSection();
+        sections.back().rows.push_back({label, value});
+    }
+
+private:
+    int minWidth;
+    std::string title;
+    std::vector<Section> sections;
+
+    const std::string RESET   = "\033[0m";
+    const std::string TITLE   = "\033[1;37m";
+    const std::string BORDER  = "\033[1;36m";
+    const std::string LABEL   = "\033[1;34m";
+    const std::string VALUE   = "\033[1;32m";
+    const std::string SECTION = "\033[1;33m";
+
+    int calculateWidth() const {
+        int w = minWidth;
+
+        w = std::max(w, (int)title.size() + 4);
+
+        for (const auto& sec : sections) {
+            w = std::max(w, (int)sec.title.size() + 6);
+
+            for (const auto& r : sec.rows) {
+                int len = 2 + r.label.size() + 1 + r.value.size() + 2;
+                w = std::max(w, len);
+            }
+        }
+
+        return w;
+    }
+
+public:
+    void draw() const {
+        int width = calculateWidth();
+
+        auto line = [&](char left, char fill, char right) {
+            std::cout << BORDER << left
+                      << std::string(width - 2, fill)
+                      << right << RESET << "\n";
+        };
+
+        auto centered = [&](const std::string& text, const std::string& color) {
+            int pad = (width - 2 - (int)text.size()) / 2;
+            std::cout << BORDER << "|"
+                      << std::string(pad, ' ')
+                      << color << text << RESET
+                      << std::string(width - 2 - pad - text.size(), ' ')
+                      << BORDER << "|" << RESET << "\n";
+        };
+
+        auto sectionLine = [&](const std::string& text) {
+            std::string t = " " + text + " ";
+            int total = width - 2;
+
+            int left = (total - t.size()) / 2;
+            int right = total - t.size() - left;
+
+            std::cout << BORDER << "+"
+                      << std::string(left, '-')
+                      << SECTION << t << RESET
+                      << BORDER
+                      << std::string(right, '-')
+                      << "+"
+                      << RESET << "\n";
+        };
+
+        auto row = [&](const Row& r) {
+            std::ostringstream out;
+            out << " " << LABEL << std::left << std::setw(18) << r.label << RESET
+                << " " << VALUE << std::left << std::setw(width - 23) << r.value << RESET << " ";
+
+            std::string s = out.str();
+            if ((int)s.size() < width - 2)
+                s += std::string(width - 2 - s.size(), ' ');
+
+            std::cout << BORDER << "|" << RESET
+                      << s
+                      << BORDER << "|" << RESET << "\n";
+        };
+
+        line('=','=', '=');
+        centered(" " + title + " ", TITLE);
+        line('=','=', '=');
+
+        for (const auto& sec : sections) {
+
+            if (!sec.title.empty()) {
+                sectionLine(sec.title);
+            } else {
+                line('-','-','-');
+            }
+
+            for (const auto& r : sec.rows) {
+                row(r);
+            }
+        }
+
+        line('=','=', '=');
+    }
 };
+
+
 
 class Help {
-    private: 
-        int maxPerLine = 4;
+private:
+    int maxPerLine = 4;
 
-    public:
-        std::string standard = getAnsiColor('8');
-        std::string textColor1 = getAnsiColor('1');
-        std::string textColor2 = getAnsiColor('3');
-        std::string sudoColor = getAnsiColor('B');
+    std::string standard   = getAnsiColor('8');
+    std::string textColor1 = getAnsiColor('1');
+    std::string textColor2 = getAnsiColor('3');
+    std::string catTitle   = getAnsiColor('D');
+    std::string sudoColor  = getAnsiColor('B');
 
-        void printStandardCmds(std::vector<std::string> cmds) {
-            for (size_t i = 0; i < cmds.size(); i++) {
-                if (i == 0) std::cout << "  ";
-                if (i != 0 && (i % maxPerLine) == 0) {
-                    std::cout << "\n  ";
-                }
+    struct cmdHelp {
+        std::string cmd;
+        std::vector<std::string> args = {};
+        boolean sudo = false;
+        std::string suffix = ""; 
+    };
 
-                std::cout << textColor1 << cmds[i];
+    struct Category {
+        std::string title;
+        std::vector<cmdHelp> lines;
+        size_t width = 0;
+    };
 
-                if (i < cmds.size() - 1 && ((i + 1) % maxPerLine) != 0) {
-                    std::cout << standard << ", ";
-                }
+    std::vector<Category> categories;
+
+    void printCategory(const std::string& title) {
+        std::cout << "\n" << standard << "==== " << catTitle << title << standard << " ====\n";
+    }
+
+    void initCategories() {
+        categories.clear();
+
+        categories.push_back({
+            "General",
+            {
+                {"help"}, {"clear"}, {"echo"}, {"ls"}, {"exit"}, {"logout"}, {"date"}
             }
-            std::cout << "\n";
+        });
+
+        categories.push_back({
+            "Network & System",
+            {
+                {"ping", {"ip"}},
+                {"sys", {"info", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "config", "host", "update", "clearcache", "bench"}}
+            }
+        });
+
+        categories.push_back({
+            "File System",
+            {
+                {"dir /s"},
+                {"cd", {"Folder Path", "Folder Name"}},
+                {"mkdir", {"Folder Name"}},
+                {"rm", {"File Name", "Folder Name"}, true},
+                {"touch", {"File Name"}},
+                {"vom", {"File Name"}}
+            }
+        });
+
+        categories.push_back({
+            "Users & Permissions",
+            {
+                {"user", {"list", "add", "edit", "del", "help"}, true},
+                {"perm", {"list", "edit", "info", "help"}, true},
+                {"passwd", {}, true}
+            }
+        });
+
+        categories.push_back({
+            "System Tools",
+            {
+                {"apt update/install", {"Package"}, true}
+            }
+        });
+
+        categories.push_back({
+            "UI & Output",
+            {
+                {"print", {"text"}},
+                {"color", {"hex-codes"}, false, "(0-F, 7 default)"}
+            }
+        });
+    }
+
+    void printStandardCmds(const std::vector<cmdHelp>& cmds) {
+        std::cout << textColor1 << "  ";
+
+        for (size_t i = 0; i < cmds.size(); i++) {
+            if (i != 0 && i % maxPerLine == 0) {
+                std::cout << "\n  ";
+            }
+
+            std::cout << textColor1 << cmds[i].cmd;
+
+            if (i < cmds.size() - 1 && ((i + 1) % maxPerLine) != 0) {
+                std::cout << standard << ", ";
+            }
         }
 
-        void printHelp(std::string cmd, std::vector<std::string> list, boolean sudo = false, std::string suffix = "") {
-            if ((int) list.size() > 0) {
-                std::cout << textColor1 + "  " << cmd << " " << standard << "<";
+        std::cout << standard << "\n";
+    }
 
-                for (int i = 0; i < (int)list.size(); i++) {
-                    std::cout << textColor2 << list[i];
+    void printHelp(
+        const std::string& cmd,
+        const std::vector<std::string>& list,
+        bool sudo = false,
+        const std::string& suffix = ""
+    ) {
+        std::cout << textColor1 << "  " << cmd << " ";
 
-                    if (i < (int)list.size() - 1) {
-                        std::cout << standard << "/";
-                    }
+        if (!list.empty()) {
+            std::cout << standard << "<";
+
+            for (size_t i = 0; i < list.size(); i++) {
+                std::cout << textColor2 << list[i];
+
+                if (i < list.size() - 1) {
+                    std::cout << standard << " / ";
                 }
+            }
 
-                std::cout << standard + ">";
+            std::cout << standard << ">";
+        }
+
+        if (!suffix.empty()) {
+            std::cout << standard << " " << suffix;
+        }
+
+        if (sudo) {
+            std::cout << standard << " (" << sudoColor << "sudo" << standard << " required)";
+        }
+
+        std::cout << standard << "\n";
+    }
+
+    void printCmds() {
+        int catIndex = 0;
+        for (const auto& category : categories) {
+            printCategory(category.title);
+
+            if (catIndex > 0) {
+                for (const auto& cmd : category.lines) {
+                    printHelp(cmd.cmd, cmd.args, cmd.sudo, cmd.suffix);
+                }
             } else {
-                std::cout << textColor1 + "  " << cmd;
+                printStandardCmds(category.lines);
             }
-            if (!sudo && suffix != "") std::cout << standard << " " << suffix << "\n";
-            else if (!sudo && suffix == "") std::cout << standard<< "\n";
-            else if (sudo && suffix != "") std::cout << standard << " " << suffix << " (" << sudoColor << "sudo" << standard << " required)\n";
-            else if (sudo && suffix == "") std::cout << standard << " (" << sudoColor << "sudo" << standard << " required)\n";
-        }
-};
 
-Help help;
+            catIndex++;
+        }
+    }
+
+public:
+    void render() {
+        initCategories();
+        printCmds();
+    }
+};
 
 // ==========================
 // Befehle
@@ -698,27 +921,11 @@ Help help;
 void cmd_help(const std::vector<std::string>& args) {
     (void)args;
 
-    std::string standard = help.standard;
-    std::string textColor1 = help.textColor1;
-    std::string sudoColor = help.sudoColor;
+    Help help;
 
     printScreen("Help");
     std::cout << currentColor + "Available Commands:\n";
-    help.printStandardCmds({"help", "clear", "echo", "ls", "exit", "logout", "date"});
-    help.printHelp("ping", {"ip"});
-    help.printHelp("dir /s", {});
-    help.printHelp("apt update" + standard + "/" + textColor1 + "install", {"Package"}, true);
-    help.printHelp("cd", {"Folder Path", "Folder Name"});
-    help.printHelp("mkdir", {"Folder Name"});
-    help.printHelp("rm", {"filename", "foldername"}, true);
-    help.printHelp("touch", {"File Name"});
-    help.printHelp("vim", {"File Name"});
-    help.printHelp("color", {"hex-code"}, false, "(0-F) {7 = default}");
-    help.printHelp("passwd", {}, true);
-    help.printHelp("user", {"list", "add", "edit", "del", "help"}, true);
-    help.printHelp("perm", {"list", "edit", "info", "help"}, true);
-    help.printHelp("print", {"word to print"});
-    help.printHelp("sys", {"info", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "config", "host", "update", "clearcache", "bench"});
+    help.render();
 }
 
 void cmd_clear(const std::vector<std::string>& args) {
@@ -1512,14 +1719,12 @@ void cmd_user(const std::vector<std::string>& args, Terminal& term, std::string 
 
         VariadicTable<int, std::string, std::string, std::string, std::string, std::string, std::string, std::string, std::string> userTable({"UserId", "Username", "Prename", "Lastname", "Password", "Created", "Rank", "Rights", "Permissions"});
 
-        // 1) Kopiere Paare in einen Vektor (Erhält die aktuelle Iterations-Reihenfolge)
         std::vector<std::pair<const std::string, User>> vec;
         vec.reserve(users.size());
         for (const auto& p : users) {
             vec.push_back(p);
         }
 
-        // 2) Iteriere den Vektor rückwärts
         std::string allRights = "rwxs";
         for (auto it = vec.rbegin(); it != vec.rend(); ++it) {
             const User& u = it->second;
@@ -1869,6 +2074,51 @@ void cmd_date(const std::vector<std::string>& args, Terminal& term) {
     std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
     std::tm *ltm = std::localtime(&currentTime);
 
+    const char* weekdays[] = {
+        "Sunday","Monday","Tuesday",
+        "Wednesday","Thursday","Friday","Saturday"
+    };
+
+    std::ostringstream date, time;
+
+    date << (1900 + ltm->tm_year) << "-"
+         << std::setw(2) << std::setfill('0') << (1 + ltm->tm_mon) << "-"
+         << std::setw(2) << ltm->tm_mday;
+
+    time << std::setw(2) << std::setfill('0') << ltm->tm_hour << ":"
+         << std::setw(2) << ltm->tm_min << ":"
+         << std::setw(2) << ltm->tm_sec;
+
+    ConsoleWindow win(50, "Current Date");
+
+    win.addSection("General");
+    win.addRow("Date", date.str());
+    win.addRow("Time", time.str());
+    win.addRow("Day", weekdays[ltm->tm_wday]);
+
+    win.addSection("Date Details");
+    win.addRow("Year", std::to_string(1900 + ltm->tm_year));
+    win.addRow("Month", std::to_string(1 + ltm->tm_mon));
+    win.addRow("Day", std::to_string(ltm->tm_mday));
+    win.addRow("Day of Year", std::to_string(ltm->tm_yday));
+
+    win.addSection("Time Details");
+    win.addRow("Hour", std::to_string(ltm->tm_hour));
+    win.addRow("Minute", std::to_string(ltm->tm_min));
+    win.addRow("Second", std::to_string(ltm->tm_sec));
+
+    win.addSection("Other");
+    win.addRow("Summertime", ltm->tm_isdst ? "Yes" : "No");
+
+    win.draw();
+}
+
+void cmd_dateOld(const std::vector<std::string>& args, Terminal& term) {
+    (void) args; (void) term;
+    auto now = std::chrono::system_clock::now();
+    std::time_t currentTime = std::chrono::system_clock::to_time_t(now);
+    std::tm *ltm = std::localtime(&currentTime);
+
     const std::string RESET  = "\033[0m";
     const std::string TITLE  = "\033[1;37m";
     const std::string BORDER = "\033[1;36m";
@@ -1877,8 +2127,8 @@ void cmd_date(const std::vector<std::string>& args, Terminal& term) {
     const std::string DIM    = "\033[2m";
 
     const char* weekdays[] = {
-        "Sonntag","Montag","Dienstag",
-        "Mittwoch","Donnerstag","Freitag","Samstag"
+        "Sunday","Monday","Tuesday",
+        "Wednesday","Thursday","Friday","Saturday"
     };
 
     std::ostringstream date, time;
@@ -1918,42 +2168,148 @@ void cmd_date(const std::vector<std::string>& args, Terminal& term) {
 
     line('+','-','+');
 
-    row("Datum", date.str());
-    row("Uhrzeit", time.str());
-    row("Wochentag", weekdays[ltm->tm_wday] + std::string(" (") + std::to_string(ltm->tm_wday) + ")");
+    row("Date", date.str());
+    row("Time", time.str());
+    row("Day", weekdays[ltm->tm_wday]/* + std::string(" (") + std::to_string(ltm->tm_wday) + ")"*/);
 
     line('+','-','+');
 
-    row("Jahr", std::to_string(1900 + ltm->tm_year));
-    row("Monat", std::to_string(1 + ltm->tm_mon));
-    row("Tag", std::to_string(ltm->tm_mday));
-    row("Tag im Jahr", std::to_string(ltm->tm_yday));
+    row("Year", std::to_string(1900 + ltm->tm_year));
+    row("Month", std::to_string(1 + ltm->tm_mon));
+    row("Day", std::to_string(ltm->tm_mday));
+    row("Day of the Year", std::to_string(ltm->tm_yday));
 
     line('+','-','+');
     
-    row("Stunde", std::to_string(ltm->tm_hour));
+    row("Hour", std::to_string(ltm->tm_hour));
     row("Minute", std::to_string(ltm->tm_min));
-    row("Sekunde", std::to_string(ltm->tm_sec));
+    row("Second", std::to_string(ltm->tm_sec));
     
     line('+','-','+');
     
-    row("Sommerzeit", ltm->tm_isdst ? "Ja (1)" : "Nein (0)");
+    row("Summertime", ltm->tm_isdst ? "Yes" : "No");
 
     line('+','-','+');
-
-    std::cout << DIM << "Wochentag: 0=Sonntag, 6=Samstag" << RESET << "\n";
+    //std::cout << DIM << "Wochentag: 0=Sonntag, 6=Samstag" << RESET << "\n";
 }
 
 std::string curVersion;
 
-void addVersion(std::string version) {
-    curVersion = version;
-    std::cout << currentColor + "   \033[0;37mGeistOS v\033[1;0m\033[0;35m" + version + "\033[0;0m:\n";
-}
+class Versions {
+private: 
+    struct changes {
+        std::string type;
+        std::string color;
+        std::string description; 
+    };
 
-void addUpdate(std::string prefix, std::string color, std::string change) {
-    std::cout << currentColor + "       \033[1;30m" + prefix + "\033[1;0m " + color + change + "\033[0m\n";
-}
+    struct allVersions {
+        std::string title;
+        std::vector<changes> changes;
+    };
+
+    std::vector<allVersions> allVersions;
+
+    void initVersions() {
+        allVersions.clear();
+
+        allVersions.push_back({
+            "0.0.0.1",
+            {
+                {"Added", "\033[1;30m", "Dynamic C++ Code for an Linux like OS"},
+                {"Added", "\033[1;34m", "help\033[0m, \033[1;34mclear\033[0m, \033[1;34mecho\033[0m, \033[1;34mls\033[0m, \033[1;34mexit"},
+                {"Added", "\033[1;34m", "ping <ip>"}
+            }
+        });
+
+        allVersions.push_back({
+            "0.0.0.2",
+            {
+                {"Added", "\033[1;34m", "dir /s"},
+                {"Added", "\033[1;34m", "apt update/install <Package>\033[0m (\033[1;36msudo\033[0m required)"},
+                {"Added", "\033[1;34m", "cd <Folder Path or Folder Name>"},
+                {"Added", "\033[1;34m", "mkdir <Folder Name>"}, 
+                {"Added", "\033[1;34m", "rm <filename|foldername>\033[0m (\033[1;36msudo\033[0m required)"},
+                {"Added", "\033[1;34m", "touch <File Name>"},
+                {"Added", "\033[1;34m", "vim <File Name>"}
+            }
+        });
+
+        allVersions.push_back({
+            "0.0.0.3",
+            {
+                {"Added", "\033[1;34m", "color <hex-code>\033[0m (0-F) {7 = default}"},
+                {"Added", "\033[1;34m", "addUser <Username>"},
+                {"Added", "\033[1;34m", "listUser <Username>"},
+                {"Added", "\033[1;34m", "delUser <Username>"},
+                {"Added", "\033[1;34m", "passwd\033[0m (\033[1;36msudo\033[0m required)"}
+            }
+        });
+
+        allVersions.push_back({
+            "0.0.0.4",
+            {
+                {"Updated", "\033[1;34m", "user <list/add/edit/del/help>\033[0m (\033[1;36msudo\033[0m required)"},
+                {"Reworked", "\033[1;34m", "perm <list/edit/info/help>\033[0m (\033[1;36msudo\033[0m required)"},
+                {"Added", "\033[1;30m", "Spinning Ghost Idle Animation"},
+                {"Added", "\033[1;30m", "Early Versions of GeistOS GUI"},
+                {"Added", "\033[1;34m", "win"},
+                {"Added", "\033[1;34m", "Letter Library for print Cmd"},
+                {"Added", "\033[1;34m", "print <word to print>"}
+            }
+        });
+
+        allVersions.push_back({
+            "0.0.0.5",
+            {
+                {"Reworked", "\033[1;30m", "Spinning Ghost Idle Animation"}, 
+                {"Disabled", "\033[1;30m", "Spinning 3D Ghost Idle Animation"}, 
+                {"Added", "\033[1;34m", "sys version <history/cur>"},
+                {"Added", "\033[1;34m", "sys log <show/clear>"}
+            }
+        });
+
+        allVersions.push_back({
+            "0.0.0.6",
+            {
+                {"Reworked", "\033[1;30m", "User Rank System"},
+                {"Reworked", "\033[1;30m", "User Settings Menu"},
+                {"Added", "\033[1;34m", "A lot of Features to the sys Command"},
+                {"Info", "\033[1;30m", "Type 'sys help' to see all features"},
+                {"Added", "\033[1;34m", "Pipes that run multiple commands at once"},
+                {"Reworked", "\033[1;30m", "The Help Screen with fresh colors and new Backend"},
+                {"Added", "\033[1;34m", "The Date Command with a beautiful Table View"},
+                {"Reworked", "\033[1;30m", "The Date Command with a modular Design"},
+                {"Reworked", "\033[1;30m", "The Logic of the 'help' and the 'sys versions' command to be more modular"},
+            }
+        });
+    }
+
+    void printVersion(std::string version) {
+        curVersion = version;
+        std::cout << currentColor + "   \033[0;37mGeistOS v\033[1;0m\033[0;35m" + version + "\033[0;0m:\n";
+    }
+
+    void printUpdate(std::string prefix, std::string color, std::string change) {
+        std::cout << currentColor + "       \033[1;30m" + prefix + "\033[1;0m " + color + change + "\033[0m\n";
+    }
+
+    void printVersionHistory() {
+        for (const auto& version : allVersions) {
+            printVersion(version.title);
+
+            for (const auto& change : version.changes) {
+                printUpdate(change.type, change.color, change.description);
+            }
+        }
+    }
+
+public:
+    void render() {
+        initVersions();
+        printVersionHistory();
+    }
+};
 
 // =========================
 // Fake System States
@@ -1996,56 +2352,13 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
         return;
     } else if (args[1] == "version") {
         if (args[2] == "history") {
+            Versions versions;
+
             printScreen("Versions");
 
-            //addVersion("Version");
-            //addUpdate("Prefix", "Color", "Change");
-            
             std::cout << currentColor + "All \033[0;35mVersions\033[0;0m:\n";
-            addVersion("0.0.0.1");
-            addUpdate("Added", "\033[1;30m", "Dynamic C++ Code for an Linux like OS");
-            addUpdate("Added", "\033[1;34m", "help\033[0m, \033[1;34mclear\033[0m, \033[1;34mecho\033[0m, \033[1;34mls\033[0m, \033[1;34mexit");
-            addUpdate("Added", "\033[1;34m", "ping <ip>");
-
-            addVersion("0.0.0.2");
-            addUpdate("Added", "\033[1;34m", "dir /s");
-            addUpdate("Added", "\033[1;34m", "apt update/install <Package>\033[0m (\033[1;36msudo\033[0m required)");
-            addUpdate("Added", "\033[1;34m", "cd <Folder Path or Folder Name>");
-            addUpdate("Added", "\033[1;34m", "mkdir <Folder Name>");
-            addUpdate("Added", "\033[1;34m", "rm <filename|foldername>\033[0m (\033[1;36msudo\033[0m required)");
-            addUpdate("Added", "\033[1;34m", "touch <File Name>");
-            addUpdate("Added", "\033[1;34m", "vim <File Name>");
+            versions.render();
             
-            addVersion("0.0.0.3");
-            addUpdate("Added", "\033[1;34m", "color <hex-code>\033[0m (0-F) {7 = default}");
-            addUpdate("Added", "\033[1;34m", "addUser <Username>");
-            addUpdate("Added", "\033[1;34m", "listUser <Username>");
-            addUpdate("Added", "\033[1;34m", "delUser <Username");
-            addUpdate("Added", "\033[1;34m", "passwd\033[0m (\033[1;36msudo\033[0m required)");
-            
-            addVersion("0.0.0.4");
-            addUpdate("Updated", "\033[1;34m", "user <list/add/edit/del/help>\033[0m (\033[1;36msudo\033[0m required)");
-            addUpdate("Reworked", "\033[1;34m", "perm <list/edit/info/help>\033[0m (\033[1;36msudo\033[0m required)");
-            addUpdate("Added", "\033[1;30m", "Spinning Ghost Idle Animation");
-            addUpdate("Added", "\033[1;30m", "Early Versions of GeistOS GUI");
-            addUpdate("Added", "\033[1;34m", "win");
-            addUpdate("Added", "\033[1;34m", "Letter Library for print Cmd");
-            addUpdate("Added", "\033[1;34m", "print <word to print>");
-            
-            addVersion("0.0.0.5");
-            addUpdate("Reworked", "\033[1;30m", "Spinning Ghost Idle Animation");
-            addUpdate("Disabled", "\033[1;30m", "Spinning 3D Ghost Idle Animation");
-            addUpdate("Added", "\033[1;34m", "sys version <history/cur>");
-            addUpdate("Added", "\033[1;34m", "sys log <show/clear>");
-
-            addVersion("0.0.0.6");
-            addUpdate("Reworked", "\033[1;30m", "User Rank System");
-            addUpdate("Reworked", "\033[1;30m", "User Settings Menu");
-            addUpdate("Added", "\033[1;34m", "A lot of Features to the sys Command");
-            addUpdate("Info", "\033[1;30m", "Type 'sys help' to see all features");
-            addUpdate("Added", "\033[1;34m", "Pipes that run multiple commands at once");
-            addUpdate("Reworked", "\033[1;30m", "The Help Screen with fresh colors and new Backend");
-            addUpdate("Added", "\033[1;34m", "The Date Command with a beautiful Table View");
         } else if (args[2] == "cur") {
             std::cout << currentColor + "\033[1;30mCurrent Version\033[1;0m: \033[0;37mGeistOS v\033[1;0m\033[0;35m" + curVersion + "\033[0;0m:\n";
         } else {
