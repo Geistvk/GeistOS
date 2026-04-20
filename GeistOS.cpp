@@ -754,18 +754,8 @@ public:
     }
 };
 
-
-
-class Help {
-private:
-    int maxPerLine = 4;
-
-    std::string standard   = getAnsiColor('8');
-    std::string textColor1 = getAnsiColor('1');
-    std::string textColor2 = getAnsiColor('3');
-    std::string catTitle   = getAnsiColor('D');
-    std::string sudoColor  = getAnsiColor('B');
-
+class Config {
+protected: 
     struct cmdHelp {
         std::string cmd;
         std::vector<std::string> args = {};
@@ -779,13 +769,25 @@ private:
         size_t width = 0;
     };
 
+
+
+
+    struct changes {
+        std::string type;
+        std::string color;
+        std::string description; 
+    };
+
+    struct versionHistory {
+        std::string title;
+        std::vector<changes> changes;
+    };
+    
+private: 
     std::vector<Category> categories;
+    std::vector<versionHistory> allVersions;
 
-    void printCategory(const std::string& title) {
-        std::cout << "\n" << standard << "==== " << catTitle << title << standard << " ====\n";
-    }
-
-    void initCategories() {
+    void initHelpCategories() {
         categories.clear();
 
         categories.push_back({
@@ -799,7 +801,8 @@ private:
             "Network & System",
             {
                 {"ping", {"ip"}},
-                {"sys", {"info", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "config", "host", "update", "clearcache", "bench"}}
+                {"sys", {"info", "help", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "host", "config", "update", "clearcache", "bench"}},
+                {"pleaseHelp", {"info", "help", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "host", "config", "update", "clearcache", "bench"}}
             }
         });
 
@@ -840,6 +843,120 @@ private:
         });
     }
 
+
+
+
+
+    void initVersions() {
+        allVersions.clear();
+
+        allVersions.push_back({
+            "0.0.0.1",
+            {
+                {"Added", "\033[1;30m", "Dynamic C++ Code for an Linux like OS"},
+                {"Added", "\033[1;34m", "help\033[0m, \033[1;34mclear\033[0m, \033[1;34mecho\033[0m, \033[1;34mls\033[0m, \033[1;34mexit"},
+                {"Added", "\033[1;34m", "ping <ip>"}
+            }
+        });
+
+        allVersions.push_back({
+            "0.0.0.2",
+            {
+                {"Added", "\033[1;34m", "dir /s"},
+                {"Added", "\033[1;34m", "apt update/install <Package>\033[0m (\033[1;36msudo\033[0m required)"},
+                {"Added", "\033[1;34m", "cd <Folder Path or Folder Name>"},
+                {"Added", "\033[1;34m", "mkdir <Folder Name>"}, 
+                {"Added", "\033[1;34m", "rm <filename|foldername>\033[0m (\033[1;36msudo\033[0m required)"},
+                {"Added", "\033[1;34m", "touch <File Name>"},
+                {"Added", "\033[1;34m", "vim <File Name>"}
+            }
+        });
+
+        allVersions.push_back({
+            "0.0.0.3",
+            {
+                {"Added", "\033[1;34m", "color <hex-code>\033[0m (0-F) {7 = default}"},
+                {"Added", "\033[1;34m", "addUser <Username>"},
+                {"Added", "\033[1;34m", "listUser <Username>"},
+                {"Added", "\033[1;34m", "delUser <Username>"},
+                {"Added", "\033[1;34m", "passwd\033[0m (\033[1;36msudo\033[0m required)"}
+            }
+        });
+
+        allVersions.push_back({
+            "0.0.0.4",
+            {
+                {"Updated", "\033[1;34m", "user <list/add/edit/del/help>\033[0m (\033[1;36msudo\033[0m required)"},
+                {"Reworked", "\033[1;34m", "perm <list/edit/info/help>\033[0m (\033[1;36msudo\033[0m required)"},
+                {"Added", "\033[1;30m", "Spinning Ghost Idle Animation"},
+                {"Added", "\033[1;30m", "Early Versions of GeistOS GUI"},
+                {"Added", "\033[1;34m", "win"},
+                {"Added", "\033[1;34m", "Letter Library for print Cmd"},
+                {"Added", "\033[1;34m", "print <word to print>"}
+            }
+        });
+
+        allVersions.push_back({
+            "0.0.0.5",
+            {
+                {"Reworked", "\033[1;30m", "Spinning Ghost Idle Animation"}, 
+                {"Disabled", "\033[1;30m", "Spinning 3D Ghost Idle Animation"}, 
+                {"Added", "\033[1;34m", "sys version <history/cur>"},
+                {"Added", "\033[1;34m", "sys log <show/clear>"}
+            }
+        });
+
+        allVersions.push_back({
+            "0.0.0.6",
+            {
+                {"Reworked", "\033[1;30m", "User Rank System"},
+                {"Reworked", "\033[1;30m", "User Settings Menu"},
+                {"Added", "\033[1;34m", "A lot of Features to the sys Command"},
+                {"Info", "\033[1;30m", "Type 'sys help' to see all features"},
+                {"Added", "\033[1;34m", "Pipes that run multiple commands at once"},
+                {"Reworked", "\033[1;30m", "The Help Screen with fresh colors and new Backend"},
+                {"Added", "\033[1;34m", "The Date Command with a beautiful Table View"},
+                {"Reworked", "\033[1;30m", "The Date Command with a modular Design"},
+                {"Reworked", "\033[1;30m", "The Logic of the 'help' and the 'sys versions' command to be more modular"},
+                {"Added", "\033[1;34m", "A central Config class that the 'help' and 'sys version' command get the data from"}
+            }
+        });
+    }
+
+public: 
+    Config() {
+        initHelpCategories();
+        initVersions();
+    }
+
+    std::vector<Category> getHelpCategories() {
+        return categories;
+    }
+
+    std::vector<versionHistory> getAllVersions() {
+        return allVersions;
+    }
+};
+
+Config config;
+
+class Help: public Config {
+private:
+    int maxPerLine = 4;
+    int maxListPerLine = 6;
+
+    std::string standard   = getAnsiColor('8');
+    std::string textColor1 = getAnsiColor('1');
+    std::string textColor2 = getAnsiColor('3');
+    std::string catTitle   = getAnsiColor('D');
+    std::string sudoColor  = getAnsiColor('B');
+
+    std::vector<Category> categories;
+
+    void printCategory(const std::string& title) {
+        std::cout << "\n" << standard << "==== " << catTitle << title << standard << " ====\n";
+    }
+
     void printStandardCmds(const std::vector<cmdHelp>& cmds) {
         std::cout << textColor1 << "  ";
 
@@ -869,12 +986,37 @@ private:
         if (!list.empty()) {
             std::cout << standard << "<";
 
+            int totalListIndex = 0;
+            int listIndex = 0;
+            int totalCharLength = 0;
+
+            auto handleOverflow = [&]() {
+                std::cout << standard << "|" << totalCharLength;
+                std::cout << standard << "\n   ";
+                for (size_t u = 0; u <= cmd.size(); u++) {
+                    std::cout << standard << " ";
+                }
+                listIndex = 0;
+                totalCharLength = 0;
+            };
+
             for (size_t i = 0; i < list.size(); i++) {
-                std::cout << textColor2 << list[i];
+                totalCharLength += (int) list[i].size();
+
+                std::cout << textColor2 << list[i] << "(" << (int)list[i].size() << "|" << totalCharLength << ")";
 
                 if (i < list.size() - 1) {
-                    std::cout << standard << " / ";
+                    std::cout << standard << "/";
                 }
+
+                if (listIndex >= maxListPerLine && (totalListIndex + 1) < ((int) list.size())) {
+                    handleOverflow();
+                } else if (totalCharLength >= (maxListPerLine * 2) && (totalListIndex + 1) < ((int) list.size())) {
+                    handleOverflow();
+                }
+
+                totalListIndex++;
+                listIndex++;
             }
 
             std::cout << standard << ">";
@@ -906,6 +1048,10 @@ private:
 
             catIndex++;
         }
+    }
+
+    void initCategories() {
+        categories = config.getHelpCategories();
     }
 
 public:
@@ -2195,94 +2341,12 @@ void cmd_dateOld(const std::vector<std::string>& args, Terminal& term) {
 
 std::string curVersion;
 
-class Versions {
+class Versions: public Config {
 private: 
-    struct changes {
-        std::string type;
-        std::string color;
-        std::string description; 
-    };
-
-    struct allVersions {
-        std::string title;
-        std::vector<changes> changes;
-    };
-
-    std::vector<allVersions> allVersions;
+    std::vector<versionHistory> allVersions;
 
     void initVersions() {
-        allVersions.clear();
-
-        allVersions.push_back({
-            "0.0.0.1",
-            {
-                {"Added", "\033[1;30m", "Dynamic C++ Code for an Linux like OS"},
-                {"Added", "\033[1;34m", "help\033[0m, \033[1;34mclear\033[0m, \033[1;34mecho\033[0m, \033[1;34mls\033[0m, \033[1;34mexit"},
-                {"Added", "\033[1;34m", "ping <ip>"}
-            }
-        });
-
-        allVersions.push_back({
-            "0.0.0.2",
-            {
-                {"Added", "\033[1;34m", "dir /s"},
-                {"Added", "\033[1;34m", "apt update/install <Package>\033[0m (\033[1;36msudo\033[0m required)"},
-                {"Added", "\033[1;34m", "cd <Folder Path or Folder Name>"},
-                {"Added", "\033[1;34m", "mkdir <Folder Name>"}, 
-                {"Added", "\033[1;34m", "rm <filename|foldername>\033[0m (\033[1;36msudo\033[0m required)"},
-                {"Added", "\033[1;34m", "touch <File Name>"},
-                {"Added", "\033[1;34m", "vim <File Name>"}
-            }
-        });
-
-        allVersions.push_back({
-            "0.0.0.3",
-            {
-                {"Added", "\033[1;34m", "color <hex-code>\033[0m (0-F) {7 = default}"},
-                {"Added", "\033[1;34m", "addUser <Username>"},
-                {"Added", "\033[1;34m", "listUser <Username>"},
-                {"Added", "\033[1;34m", "delUser <Username>"},
-                {"Added", "\033[1;34m", "passwd\033[0m (\033[1;36msudo\033[0m required)"}
-            }
-        });
-
-        allVersions.push_back({
-            "0.0.0.4",
-            {
-                {"Updated", "\033[1;34m", "user <list/add/edit/del/help>\033[0m (\033[1;36msudo\033[0m required)"},
-                {"Reworked", "\033[1;34m", "perm <list/edit/info/help>\033[0m (\033[1;36msudo\033[0m required)"},
-                {"Added", "\033[1;30m", "Spinning Ghost Idle Animation"},
-                {"Added", "\033[1;30m", "Early Versions of GeistOS GUI"},
-                {"Added", "\033[1;34m", "win"},
-                {"Added", "\033[1;34m", "Letter Library for print Cmd"},
-                {"Added", "\033[1;34m", "print <word to print>"}
-            }
-        });
-
-        allVersions.push_back({
-            "0.0.0.5",
-            {
-                {"Reworked", "\033[1;30m", "Spinning Ghost Idle Animation"}, 
-                {"Disabled", "\033[1;30m", "Spinning 3D Ghost Idle Animation"}, 
-                {"Added", "\033[1;34m", "sys version <history/cur>"},
-                {"Added", "\033[1;34m", "sys log <show/clear>"}
-            }
-        });
-
-        allVersions.push_back({
-            "0.0.0.6",
-            {
-                {"Reworked", "\033[1;30m", "User Rank System"},
-                {"Reworked", "\033[1;30m", "User Settings Menu"},
-                {"Added", "\033[1;34m", "A lot of Features to the sys Command"},
-                {"Info", "\033[1;30m", "Type 'sys help' to see all features"},
-                {"Added", "\033[1;34m", "Pipes that run multiple commands at once"},
-                {"Reworked", "\033[1;30m", "The Help Screen with fresh colors and new Backend"},
-                {"Added", "\033[1;34m", "The Date Command with a beautiful Table View"},
-                {"Reworked", "\033[1;30m", "The Date Command with a modular Design"},
-                {"Reworked", "\033[1;30m", "The Logic of the 'help' and the 'sys versions' command to be more modular"},
-            }
-        });
+        allVersions = config.getAllVersions();
     }
 
     void printVersion(std::string version) {
@@ -2558,6 +2622,24 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
         std::cout << C_WARN << "Benchmark Time: "
                 << C_VAL << (((double) dur.count()) / 1000) << " s"
                 << C_RESET << "\n";
+    } else if (args[1] == "loading") {
+        printScreen("Loader");
+
+        std::string loading = "\u2588"; //█
+        std::string progressBar = "";
+
+        SetConsoleOutputCP(CP_UTF8);
+
+        for (int i = 0; i <= 100; i+=10) {
+            //std::cout << currentColor + "\rProgress: " << i << "%";
+            progressBar += loading;
+            std::cout << currentColor + "\rProgress: " << progressBar << " ";
+
+            std::cout.flush();
+            wait(randomNum(1000, 3000));
+        }
+        std::cout << std::endl;
+
     } else if (args[1] == "help") {
         printScreen("sys Commands");
 
