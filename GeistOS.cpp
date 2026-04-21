@@ -8,8 +8,10 @@
 
 #include <algorithm>
 #include <cctype>
+#include <memory>
 
 #include <dxgi.h>
+#include <cstdlib>
 
 #include <imgui.h>
 #include <imgui_impl_win32.h>
@@ -801,8 +803,7 @@ private:
             "Network & System",
             {
                 {"ping", {"ip"}},
-                {"sys", {"info", "help", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "host", "config", "update", "clearcache", "bench"}},
-                {"pleaseHelp", {"info", "help", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "host", "config", "update", "clearcache", "bench"}}
+                {"sys", {"info", "help", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "host", "config", "update", "clearcache", "bench"}}
             }
         });
 
@@ -830,7 +831,8 @@ private:
         categories.push_back({
             "System Tools",
             {
-                {"apt update/install", {"Package"}, true}
+                {"apt update/install", {"Package"}, true},
+                {"games", {"casino"}}
             }
         });
 
@@ -943,7 +945,7 @@ Config config;
 class Help: public Config {
 private:
     int maxPerLine = 4;
-    int maxListPerLine = 7;
+    int maxListPerLine = 9;
 
     std::string standard   = getAnsiColor('8');
     std::string textColor1 = getAnsiColor('1');
@@ -981,10 +983,10 @@ private:
         bool sudo = false,
         const std::string& suffix = ""
     ) {
-        std::cout << textColor1 << "  " << cmd << " ";
+        std::cout << textColor1 << "  " << cmd;
 
         if (!list.empty()) {
-            std::cout << standard << "<";
+            std::cout << standard << " <";
 
             int totalListIndex = 0;
             int listIndex = 0;
@@ -2671,6 +2673,370 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
 
 
 
+// Farben
+#define RED     "\033[31m"
+#define GREEN   "\033[32m"
+#define YELLOW  "\033[33m"
+#define RESET   "\033[0m"
+
+#define REDR     "\033[31m"
+#define GREENR   "\033[32m"
+#define YELLOWR  "\033[33m"
+#define WHITER   "\033[37m"
+#define RESETR   "\033[0m"
+
+class IGame {
+public:
+    virtual ~IGame() = default;
+    virtual std::string getName() const = 0;
+    virtual void play() = 0;
+};
+
+// ---------------- BANK ----------------
+class Bank {
+private:
+    int balance;
+
+public:
+    Bank(int start) : balance(start) {}
+
+    int getBalance() const {
+        return balance;
+    }
+
+    bool withdraw(int amount) {
+        if (amount > balance) return false;
+        balance -= amount;
+        return true;
+    }
+
+    void deposit(int amount) {
+        balance += amount;
+    }
+
+    void print() const {
+        std::cout << YELLOWR << "Balance: " << balance << " Chips\n" << RESETR;
+    }
+};
+
+
+
+
+
+
+// ---------------- ROULETTE ----------------
+class Roulette : public IGame {
+private:
+    Bank& bank;
+
+    bool isRed(int n) {
+        int red[] = {
+            1,3,5,7,9,12,14,16,18,19,
+            21,23,25,27,30,32,34,36
+        };
+        for (int r : red) if (r == n) return true;
+        return false;
+    }
+
+    void printNumber(int n) {
+        if (n == 0) {
+            std::cout << GREENR << n << RESETR;
+        } else if (isRed(n)) {
+            std::cout << REDR << n << RESETR;
+        } else {
+            std::cout << WHITER << n << RESETR;
+        }
+    }
+
+    void drawTable() {
+        std::cout << "\n";
+        std::cout << GREENR << "========== ROULETTE ==========\n" << RESETR;
+        std::cout << "Numbers:\n";
+
+        for (int i = 0; i <= 36; i++) {
+            printNumber(i);
+            std::cout << " ";
+
+            if (i % 12 == 0 && i != 0) std::cout << "\n";
+        }
+
+        std::cout << "\n==============================\n";
+    }
+
+    void spinWheel(int finalNumber) {
+        std::vector<int> wheel = {
+            0,32,15,19,4,21,2,25,17,34,
+            6,27,13,36,11,30,8,23,10,5,
+            24,16,33,1,20,14,31,9,22,18,
+            29,7,28,12,35,3,26
+        };
+
+        auto printNum = [&](int n) {
+            if (n == 0) std::cout << "\033[32m" << n << "\033[0m";
+            else if (isRed(n)) std::cout << "\033[31m" << n << "\033[0m";
+            else std::cout << "\033[37m" << n << "\033[0m";
+        };
+
+        int index = 0;
+
+        // finde Zielindex
+        for (int i = 0; i < (int)wheel.size(); i++) {
+            if (wheel[i] == finalNumber) {
+                index = i;
+                break;
+            } else {
+                index = 0;
+            }
+        }
+
+        int current = 0;
+        int steps = 80 + (std::rand() % 40);
+
+        for (int i = 0; i < steps; i++) {
+            current = (current + 1) % wheel.size();
+
+            std::cout << "\r";
+
+            std::cout << "        ";
+            for (int j = -3; j <= 3; j++) {
+                int idx = (current + j + wheel.size()) % wheel.size();
+
+                if (j == 0) {
+                    std::cout << "[";
+                    printNum(wheel[idx]);
+                    std::cout << "]";
+                } else {
+                    std::cout << " ";
+                    printNum(wheel[idx]);
+                    std::cout << " ";
+                }
+            }
+
+            std::cout << "   " << std::flush;
+
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(40 + i * 4)
+            );
+        }
+
+        // exakt auf Ergebnis stoppen
+        while (wheel[current] != finalNumber) {
+            current = (current + 1) % wheel.size();
+
+            std::cout << "\r        ";
+            for (int j = -3; j <= 3; j++) {
+                int idx = (current + j + wheel.size()) % wheel.size();
+
+                if (j == 0) {
+                    std::cout << "[";
+                    printNum(wheel[idx]);
+                    std::cout << "]";
+                } else {
+                    std::cout << " ";
+                    printNum(wheel[idx]);
+                    std::cout << " ";
+                }
+            }
+
+            std::cout << "   " << std::flush;
+
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(120)
+            );
+        }
+
+        std::cout << "\n";
+    }
+
+public:
+    Roulette(Bank& b) : bank(b) {}
+
+    std::string getName() const override {
+        return "Roulette";
+    }
+
+    void play() override {
+        int betNumber, betAmount;
+
+        drawTable();
+        bank.print();
+
+        std::cout << "Bet on Number (0-36): ";
+        std::cin >> betNumber;
+
+        if (betNumber < 0 || betNumber > 36) {
+            std::cout << REDR << "Invalid Number\n" << RESETR;
+            return;
+        }
+
+        std::cout << "Bet: ";
+        std::cin >> betAmount;
+
+        if (!bank.withdraw(betAmount)) {
+            std::cout << REDR << "Balance is too low\n" << RESETR;
+            return;
+        }
+
+        int result = std::rand() % 37;
+
+        std::cout << "\nWheel spins...\n";
+        spinWheel(result);
+
+        std::cout << "\nResult: ";
+        printNumber(result);
+        std::cout << "\n";
+
+        if (result == betNumber) {
+            int win = betAmount * 35;
+            bank.deposit(win);
+
+            std::cout << GREENR << "You Won +" << win << "\n" << RESETR;
+        } else {
+            std::cout << REDR << "You Lost -" << betAmount << "\n" << RESETR;
+        }
+
+        bank.print();
+    }
+};
+
+
+
+
+class DiceGame : public IGame {
+private:
+    Bank& bank;
+
+public:
+    DiceGame(Bank& b) : bank(b) {}
+
+    std::string getName() const override {
+        return "Dice Game";
+    }
+
+    void play() override {
+        int bet;
+
+        std::cout << CYAN << "\n=== DICE GAME ===\n" << RESET;
+        bank.print();
+
+        std::cout << "Bet: ";
+        std::cin >> bet;
+
+        if (!bank.withdraw(bet)) {
+            std::cout << RED << "Not enough Balance\n" << RESET;
+            return;
+        }
+
+        int player = (std::rand() % 6) + 1;
+        int cpu    = (std::rand() % 6) + 1;
+
+        std::cout << "You:  " << player << "\n";
+        std::cout << "CPU: " << cpu << "\n";
+
+        if (player > cpu) {
+            int win = bet * 2;
+            bank.deposit(win);
+            std::cout << GREEN << "You Won +" << win << "\n" << RESET;
+        } else if (player == cpu) {
+            bank.deposit(bet);
+            std::cout << YELLOW << "Tie\n" << RESET;
+        } else {
+            std::cout << RED << "You Lost -" << bet << "\n" << RESET;
+        }
+    }
+};
+
+
+
+
+
+
+
+
+class Casino {
+private:
+    Bank bank;
+    std::vector<std::unique_ptr<IGame>> games;
+
+public:
+    Casino() : bank(100000000) {
+        std::srand(static_cast<unsigned>(std::time(nullptr)));
+
+        // Games hier registrieren
+        games.push_back(std::make_unique<Roulette>(bank));
+        games.push_back(std::make_unique<DiceGame>(bank));
+    }
+
+    void showMenu() {
+        std::cout << "\033[2J\033[H";
+
+        std::cout << GREEN;
+        std::cout << "============================\n";
+        std::cout << "           CASINO           \n";
+        std::cout << "============================\n";
+        std::cout << RESET;
+
+        bank.print();
+        std::cout << "\n";
+
+        for (size_t i = 0; i < games.size(); i++) {
+            std::cout << (i + 1) << ". " << games[i]->getName() << "\n";
+        }
+
+        std::cout << "0. Exit\n";
+        std::cout << "\nChoice: ";
+    }
+
+    void run() {
+        int choice;
+
+        while (true) {
+            showMenu();
+            std::cin >> choice;
+
+            if (choice == 0) {
+                std::cout << "Bye\n";
+                break;
+            }
+
+            if (bank.getBalance() <= 0) {
+                std::cout << "Not enough Balance\n";
+                break;
+            }
+
+            if (choice < 1 || choice > (int)games.size()) {
+                std::cout << "Invalid Choice\n";
+                continue;
+            }
+
+            games[choice - 1]->play();
+
+            std::cout << "\nPress Enter to continue...";
+            std::cin.ignore();
+            std::cin.get();
+        }
+    }
+};
+
+
+
+
+// Startguthaben
+static Casino casino;
+
+
+void cmd_games(const std::vector<std::string>& args, Terminal& term) {
+    (void)term;
+
+    if (args[1] == "casino") {
+        casino.run();
+    }
+}
+
+
+
+
+
 
 
 
@@ -2879,6 +3245,14 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_sys(args, terminal);
+            return "";
+        }
+    );
+
+    terminal.registerCommand("games", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_games(args, terminal);
             return "";
         }
     );
