@@ -943,7 +943,7 @@ Config config;
 class Help: public Config {
 private:
     int maxPerLine = 4;
-    int maxListPerLine = 6;
+    int maxListPerLine = 7;
 
     std::string standard   = getAnsiColor('8');
     std::string textColor1 = getAnsiColor('1');
@@ -991,7 +991,6 @@ private:
             int totalCharLength = 0;
 
             auto handleOverflow = [&]() {
-                std::cout << standard << "|" << totalCharLength;
                 std::cout << standard << "\n   ";
                 for (size_t u = 0; u <= cmd.size(); u++) {
                     std::cout << standard << " ";
@@ -1001,17 +1000,20 @@ private:
             };
 
             for (size_t i = 0; i < list.size(); i++) {
+                boolean isNotEndItem = (totalListIndex + 1) < ((int) list.size());
                 totalCharLength += (int) list[i].size();
 
-                std::cout << textColor2 << list[i] << "(" << (int)list[i].size() << "|" << totalCharLength << ")";
+                std::cout << textColor2 << list[i];
 
                 if (i < list.size() - 1) {
                     std::cout << standard << "/";
                 }
 
-                if (listIndex >= maxListPerLine && (totalListIndex + 1) < ((int) list.size())) {
-                    handleOverflow();
-                } else if (totalCharLength >= (maxListPerLine * 2) && (totalListIndex + 1) < ((int) list.size())) {
+                if (isNotEndItem &&
+                    ((listIndex >= maxListPerLine) ||
+                    //(totalCharLength >= (maxListPerLine) * 2) ||
+                    (totalCharLength >= ((maxListPerLine - 1) * 2)))
+                ) {
                     handleOverflow();
                 }
 
