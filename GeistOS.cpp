@@ -815,7 +815,7 @@ private:
                 {"mkdir", {"Folder Name"}},
                 {"rm", {"File Name", "Folder Name"}, true},
                 {"touch", {"File Name"}},
-                {"vom", {"File Name"}}
+                {"vim", {"File Name"}}
             }
         });
 
@@ -831,8 +831,15 @@ private:
         categories.push_back({
             "System Tools",
             {
-                {"apt update/install", {"Package"}, true},
-                {"games", {"casino"}}
+                {"apt update/install", {"Package"}, true}
+            }
+        });
+
+        categories.push_back({
+            "Entertaining",
+            {
+                {"games", {"casino"}}, 
+                {"bank", {}}
             }
         });
 
@@ -920,7 +927,11 @@ private:
                 {"Added", "\033[1;34m", "The Date Command with a beautiful Table View"},
                 {"Reworked", "\033[1;30m", "The Date Command with a modular Design"},
                 {"Reworked", "\033[1;30m", "The Logic of the 'help' and the 'sys versions' command to be more modular"},
-                {"Added", "\033[1;34m", "A central Config class that the 'help' and 'sys version' command get the data from"}
+                {"Added", "\033[1;34m", "A central Config class that the 'help' and 'sys version' command get the data from"},
+                {"Added", "\033[1;34m", "A new 'games' command that has different groups of games"},
+                {"Added", "\033[1;34m", "The section 'casino' to the 'games' command"},
+                {"Added", "\033[1;34m", "The Games 'roulette', 'Dice Rolling Game' and 'Slots' to the 'games casino' command"},
+                {"Added", "\033[1;34m", "A new 'bank' command"}
             }
         });
     }
@@ -2697,6 +2708,57 @@ class Bank {
 private:
     int balance;
 
+    struct Transaction {
+        int id;
+        std::string type;
+        int amount;
+        std::string timestamp;
+        int balanceAfter;
+    };
+
+    std::vector<Transaction> history;
+    int nextId = 1;
+
+    static std::string getTimeStamp() {
+        auto now = std::chrono::system_clock::now();
+        std::time_t t = std::chrono::system_clock::to_time_t(now);
+
+        std::tm tm = *std::localtime(&t);
+
+        std::ostringstream oss;
+        oss << std::put_time(&tm, "%d.%m.%Y %H:%M:%S");
+        return oss.str();
+    }
+
+    static std::string formatBalance(long long value) {
+        std::string s = std::to_string(value);
+        std::string result;
+
+        int count = 0;
+
+        for (int i = (int)s.size() - 1; i >= 0; i--) {
+            result.insert(result.begin(), s[i]);
+            count++;
+
+            if (count % 3 == 0 && i != 0) {
+                result.insert(result.begin(), '.');
+            }
+        }
+
+        return result;
+    }
+
+    void addTransaction(const std::string& type, int amount) {
+        Transaction t;
+        t.id = nextId++;
+        t.type = type;
+        t.amount = amount;
+        t.timestamp = getTimeStamp();
+        t.balanceAfter = balance;
+
+        history.push_back(t);
+    }
+
 public:
     Bank(int start) : balance(start) {}
 
@@ -2706,16 +2768,34 @@ public:
 
     bool withdraw(int amount) {
         if (amount > balance) return false;
+
         balance -= amount;
+        addTransaction("WITHDRAW", amount);
         return true;
     }
 
     void deposit(int amount) {
         balance += amount;
+        addTransaction("DEPOSIT", amount);
     }
 
     void print() const {
-        std::cout << YELLOWR << "Balance: " << balance << " Chips\n" << RESETR;
+        std::cout << YELLOWR
+                  << "Balance: "
+                  << formatBalance(balance)
+                  << " Chips\n"
+                  << RESETR;
+    }
+
+    void printHistory() const {
+        for (const auto& t : history) {
+            std::cout << "#" << t.id
+                      << " [" << t.timestamp << "] "
+                      << t.type
+                      << " " << t.amount
+                      << " | Balance: " << t.balanceAfter
+                      << "\n";
+        }
     }
 };
 
@@ -2778,14 +2858,12 @@ private:
         };
 
         int index = 0;
+        (void) index;
 
-        // finde Zielindex
         for (int i = 0; i < (int)wheel.size(); i++) {
             if (wheel[i] == finalNumber) {
                 index = i;
                 break;
-            } else {
-                index = 0;
             }
         }
 
@@ -2819,7 +2897,6 @@ private:
             );
         }
 
-        // exakt auf Ergebnis stoppen
         while (wheel[current] != finalNumber) {
             current = (current + 1) % wheel.size();
 
@@ -2947,24 +3024,222 @@ public:
 };
 
 
+class SlotGame : public IGame {
+private:
+    Bank& bank;
+
+    const int WIDTH = 5;
+
+    std::vector<std::string> symbols = {
+        "7", "BAR", "CHR", "LEM", "DIA"
+    };
+
+    std::string pad(const std::string& s) {
+        std::string out = s;
+        while ((int)out.size() < WIDTH) out += " ";
+        return out;
+    }
+
+    std::string color(const std::string& s) {
+        if (s == "7")   return "\033[31m" + pad(s) + "\033[0m";
+        if (s == "BAR") return "\033[37m" + pad(s) + "\033[0m";
+        if (s == "CHR") return "\033[32m" + pad(s) + "\033[0m";
+        if (s == "LEM") return "\033[33m" + pad(s) + "\033[0m";
+        if (s == "DIA") return "\033[36m" + pad(s) + "\033[0m";
+        return pad(s);
+    }
+
+    void drawReels(int r1, int r2, int r3, bool highlight = false) {
+        std::cout << "\033[H";
+
+        std::cout << "==============================\n";
+        std::cout << "         SLOT MACHINE         \n";
+        std::cout << "==============================\n\n";
+
+        bank.print();
+        std::cout << "\n";
+
+        for (int row = -1; row <= 1; row++) {
+            std::string offset = "     ";
+            if (row == 0) offset = "";
+
+            int i1 = (r1 + row + symbols.size()) % symbols.size();
+            int i2 = (r2 + row + symbols.size()) % symbols.size();
+            int i3 = (r3 + row + symbols.size()) % symbols.size();
+
+            if (row == 0) std::cout << "  -->";
+
+            std::cout << offset + "  | ";
+
+            auto cell = [&](int idx) {
+                bool hl = (highlight && row == 0);
+
+                if (hl) std::cout << "\033[42m";
+                std::cout << color(symbols[idx]);
+                if (hl) std::cout << "\033[0m";
+            };
+
+            cell(i1);
+            std::cout << " | ";
+            cell(i2);
+            std::cout << " | ";
+            cell(i3);
+
+            std::cout << " |";
+
+            if (row == 0) std::cout << "  <--";
+
+            std::cout << "\n";
+        }
+
+        std::cout << "\n" << std::flush;
+    }
+
+    bool almostWin(const std::string& a,
+                   const std::string& b,
+                   const std::string& c) {
+        return (a == b && b != c) ||
+               (a == c && a != b) ||
+               (b == c && a != b);
+    }
+
+public:
+    SlotGame(Bank& b) : bank(b) {}
+
+    std::string getName() const override {
+        return "Slot Machine";
+    }
+
+    void play() override {
+        std::cout << "\033[2J\033[H";
+        int bet;
+
+        std::cout << "\n=== SLOT MACHINE ===\n";
+        bank.print();
+
+        std::cout << "Bet: ";
+        std::cin >> bet;
+
+        if (!bank.withdraw(bet)) {
+            std::cout << "Not enough Balance\n";
+            return;
+        }
+
+        system("cls");
+
+        int r1 = 0, r2 = 0, r3 = 0;
+
+        bool stop1 = false;
+        bool stop2 = false;
+        bool stop3 = false;
+
+        int spins1 = 50 + std::rand() % 10;
+        int spins2 = 70 + std::rand() % 10;
+        int spins3 = 90 + std::rand() % 10;
+
+        int target1 = (r1 + spins1) % symbols.size();
+        int target2 = (r2 + spins2) % symbols.size();
+        int target3 = (r3 + spins3) % symbols.size();
+
+        int i = 0;
+
+        while (!stop1 || !stop2 || !stop3) {
+
+            if (!stop1) {
+                r1 = (r1 + 1) % symbols.size();
+                if (i >= spins1 && r1 == target1) {
+                    stop1 = true;
+                }
+            }
+
+            if (!stop2) {
+                r2 = (r2 + 1) % symbols.size();
+                if (i >= spins2 && r2 == target2) {
+                    stop2 = true;
+                }
+            }
+
+            if (!stop3) {
+                r3 = (r3 + 1) % symbols.size();
+                if (i >= spins3 && r3 == target3) {
+                    stop3 = true;
+                }
+            }
+
+            drawReels(r1, r2, r3);
+
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(20 + i * 2)
+            );
+
+            i++;
+        }
+
+        drawReels(r1, r2, r3);
+
+        std::string a = symbols[r1];
+        std::string b = symbols[r2];
+        std::string c = symbols[r3];
+
+        bool win3 = (a == b && b == c);
+        bool win2 = almostWin(a, b, c);
+
+        if (win3 || win2) {
+            for (int i = 0; i < 8; i++) {
+                bool on = (i % 2 == 0);
+
+                drawReels(r1, r2, r3, on);
+
+                std::cout << (win3 ? "\033[32mJACKPOT LINE\033[0m"
+                                : "\033[33mWIN LINE\033[0m")
+                        << std::flush;
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+        }
+
+        std::cout << "\n";
+
+        if (a == b && b == c) {
+            int win = bet * 10;
+            bank.deposit(win);
+            std::cout << "\033[32mJACKPOT +" << win << "\033[0m\n";
+        }
+        else if (almostWin(a, b, c)) {
+            int win = bet * 3;
+            bank.deposit(win);
+            std::cout << "\033[32mWin +" << win << "\033[0m\n";
+        }
+        else {
+            std::cout << "\033[31mLose -" << bet << "\033[0m\n";
+        }
+
+        bank.print();
+    }
+};
 
 
 
 
 
+
+
+
+
+
+static Bank bank(100000000);
 
 class Casino {
 private:
-    Bank bank;
     std::vector<std::unique_ptr<IGame>> games;
 
 public:
-    Casino() : bank(100000000) {
+    Casino() {
         std::srand(static_cast<unsigned>(std::time(nullptr)));
 
-        // Games hier registrieren
         games.push_back(std::make_unique<Roulette>(bank));
         games.push_back(std::make_unique<DiceGame>(bank));
+        games.push_back(std::make_unique<SlotGame>(bank));
     }
 
     void showMenu() {
@@ -2979,41 +3254,76 @@ public:
         bank.print();
         std::cout << "\n";
 
+        std::cout << "0. Exit\n";
+
         for (size_t i = 0; i < games.size(); i++) {
             std::cout << (i + 1) << ". " << games[i]->getName() << "\n";
         }
 
-        std::cout << "0. Exit\n";
         std::cout << "\nChoice: ";
     }
 
     void run() {
-        int choice;
-
         while (true) {
+
+            if (bank.getBalance() <= 0) {
+                std::cout << "\033[31mNot enough Balance\n\033[0m";
+                return;
+            }
+
             showMenu();
+
+            int choice;
             std::cin >> choice;
 
             if (choice == 0) {
                 std::cout << "Bye\n";
-                break;
-            }
-
-            if (bank.getBalance() <= 0) {
-                std::cout << "Not enough Balance\n";
-                break;
+                return;
             }
 
             if (choice < 1 || choice > (int)games.size()) {
-                std::cout << "Invalid Choice\n";
+                std::cout << "\033[31mInvalid Choice\n\033[0m";
                 continue;
             }
 
-            games[choice - 1]->play();
+            int currentGame = choice - 1;
 
-            std::cout << "\nPress Enter to continue...";
-            std::cin.ignore();
-            std::cin.get();
+            while (true) {
+
+                games[currentGame]->play();
+
+                if (bank.getBalance() <= 0) {
+                    std::cout << "\033[31mNot enough Balance\n\033[0m";
+                    return;
+                }
+
+                std::cout << "\n";
+                std::cout << "\033[36m==============================\n";
+                std::cout << "         NEXT STEP            \n";
+                std::cout << "==============================\033[0m\n";
+
+                std::cout << "1. Play again\n";
+                std::cout << "2. Choose another game\n";
+                std::cout << "3. Exit Casino\n";
+                std::cout << "\nChoice: ";
+
+                int next;
+                std::cin >> next;
+
+                if (next == 1) {
+                    continue;
+                }
+                else if (next == 2) {
+                    break;
+                }
+                else if (next == 3) {
+                    std::cout << "Bye\n";
+                    return;
+                }
+                else {
+                    std::cout << "\033[31mInvalid Choice\033[0m\n";
+                }
+            }
         }
     }
 };
@@ -3030,6 +3340,107 @@ void cmd_games(const std::vector<std::string>& args, Terminal& term) {
 
     if (args[1] == "casino") {
         casino.run();
+    }
+}
+
+struct MenuItem {
+    std::string label;
+    std::function<void()> action;
+};
+
+void cmd_bank(const std::vector<std::string>& args, Terminal& term) {
+    (void)args;
+    (void)term;
+
+    auto clearScreen = []() {
+        #ifdef _WIN32
+            system("cls");
+        #else
+            system("clear");
+        #endif
+    };
+
+    auto getNext = [&]() {
+        std::cout << currentColor << "Press Enter to Continue ...";
+        std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+        std::cin.get();
+
+        clearScreen();
+    };
+
+    while (true) {
+        std::vector<MenuItem> menu = {
+            {
+                "Balance anzeigen",
+                [&]() {
+                    bank.print();
+                    getNext();
+                }
+            },
+            {
+                "Transaktionen anzeigen",
+                [&]() {
+                    bank.printHistory();
+                    getNext();
+                }
+            },
+            {
+                "Einzahlen",
+                [&]() {
+                    int amount;
+                    std::cout << "Betrag: ";
+                    std::cin >> amount;
+
+                    bank.deposit(amount);
+                    std::cout << "OK\n";
+
+                    getNext();
+                }
+            },
+            {
+                "Auszahlen",
+                [&]() {
+                    int amount;
+                    std::cout << "Betrag: ";
+                    std::cin >> amount;
+
+                    if (bank.withdraw(amount)) {
+                        std::cout << "OK\n";
+                    } else {
+                        std::cout << "Zu wenig Guthaben\n";
+                    }
+
+                    getNext();
+                }
+            }
+        };
+
+        clearScreen();
+
+        std::cout << "\n=== BANK MENU ===\n";
+        std::cout << "0. Exit\n";
+
+        for (size_t i = 0; i < menu.size(); i++) {
+            std::cout << i + 1 << ". " << menu[i].label << "\n";
+        }
+
+        std::cout << "Auswahl: ";
+
+        int choice;
+        std::cin >> choice;
+
+        if (choice == 0) {
+            clearScreen();
+            break;
+        }
+
+        if (choice < 0 || choice > (int)menu.size()) {
+            std::cout << "Ungültig\n";
+            getNext();
+            continue;
+        }
+
+        menu[choice - 1].action();
     }
 }
 
@@ -3253,6 +3664,14 @@ int main() {
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_games(args, terminal);
+            return "";
+        }
+    );
+
+    terminal.registerCommand("bank", 
+        [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
+            (void)input;
+            cmd_bank(args, terminal);
             return "";
         }
     );
