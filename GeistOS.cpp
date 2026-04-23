@@ -774,15 +774,21 @@ protected:
 
 
 
+
     struct changes {
         std::string type;
         std::string color;
-        std::string description; 
+        std::string description;
+    };
+
+    struct SubVersions {
+        std::string title;
+        std::vector<changes> changes;
     };
 
     struct versionHistory {
         std::string title;
-        std::vector<changes> changes;
+        std::vector<SubVersions> subVersions;
     };
     
 private: 
@@ -862,76 +868,163 @@ private:
         allVersions.push_back({
             "0.0.0.1",
             {
-                {"Added", "\033[1;30m", "Dynamic C++ Code for an Linux like OS"},
-                {"Added", "\033[1;34m", "help\033[0m, \033[1;34mclear\033[0m, \033[1;34mecho\033[0m, \033[1;34mls\033[0m, \033[1;34mexit"},
-                {"Added", "\033[1;34m", "ping <ip>"}
+                {
+                    "0.0.0.1.1",
+                    {
+                        {"Added", "\033[1;30m", "Dynamic C++ Code for an Linux like OS"}
+                    }
+                },
+                {
+                    "0.0.0.1.2",
+                    {
+                        {"Added", "\033[1;34m", "help\033[0m, \033[1;34mclear\033[0m, \033[1;34mecho\033[0m, \033[1;34mls\033[0m, \033[1;34mexit"},
+                        {"Added", "\033[1;34m", "ping <ip>"}
+                    }
+                }
             }
         });
 
         allVersions.push_back({
             "0.0.0.2",
             {
-                {"Added", "\033[1;34m", "dir /s"},
-                {"Added", "\033[1;34m", "apt update/install <Package>\033[0m (\033[1;36msudo\033[0m required)"},
-                {"Added", "\033[1;34m", "cd <Folder Path or Folder Name>"},
-                {"Added", "\033[1;34m", "mkdir <Folder Name>"}, 
-                {"Added", "\033[1;34m", "rm <filename|foldername>\033[0m (\033[1;36msudo\033[0m required)"},
-                {"Added", "\033[1;34m", "touch <File Name>"},
-                {"Added", "\033[1;34m", "vim <File Name>"}
+                {
+                    "0.0.0.2.1",
+                    {
+                        {"Added", "\033[1;34m", "dir /s"},
+                        {"Added", "\033[1;34m", "apt update/install <Package>\033[0m (\033[1;36msudo\033[0m required)"}
+                    }
+                },
+                {
+                    "0.0.0.2.2",
+                    {
+                        {"Added", "\033[1;34m", "cd <Folder Path or Folder Name>"},
+                        {"Added", "\033[1;34m", "mkdir <Folder Name>"}, 
+                        {"Added", "\033[1;34m", "rm <filename|foldername>\033[0m (\033[1;36msudo\033[0m required)"}
+                    }
+                },
+                {
+                    "0.0.0.2.3",
+                    {
+                        {"Added", "\033[1;34m", "touch <File Name>"},
+                        {"Added", "\033[1;34m", "vim <File Name>"}
+                    }
+                }
             }
         });
 
         allVersions.push_back({
             "0.0.0.3",
             {
-                {"Added", "\033[1;34m", "color <hex-code>\033[0m (0-F) {7 = default}"},
-                {"Added", "\033[1;34m", "addUser <Username>"},
-                {"Added", "\033[1;34m", "listUser <Username>"},
-                {"Added", "\033[1;34m", "delUser <Username>"},
-                {"Added", "\033[1;34m", "passwd\033[0m (\033[1;36msudo\033[0m required)"}
+                {
+                    "0.0.0.3.1", 
+                    {
+                        {"Added", "\033[1;34m", "color <hex-code>\033[0m (0-F) {7 = default}"}
+                    }
+                },
+                {
+                    "0.0.0.3.2",
+                    {
+                        {"Added", "\033[1;34m", "addUser <Username>"},
+                        {"Added", "\033[1;34m", "listUser <Username>"},
+                        {"Added", "\033[1;34m", "delUser <Username>"},
+                        {"Added", "\033[1;34m", "passwd\033[0m (\033[1;36msudo\033[0m required)"}
+                    }
+                }
             }
         });
 
         allVersions.push_back({
             "0.0.0.4",
             {
-                {"Updated", "\033[1;34m", "user <list/add/edit/del/help>\033[0m (\033[1;36msudo\033[0m required)"},
-                {"Reworked", "\033[1;34m", "perm <list/edit/info/help>\033[0m (\033[1;36msudo\033[0m required)"},
-                {"Added", "\033[1;30m", "Spinning Ghost Idle Animation"},
-                {"Added", "\033[1;30m", "Early Versions of GeistOS GUI"},
-                {"Added", "\033[1;34m", "win"},
-                {"Added", "\033[1;34m", "Letter Library for print Cmd"},
-                {"Added", "\033[1;34m", "print <word to print>"}
+                {
+                    "0.0.0.4.1", 
+                    {
+                        {"Updated", "\033[1;34m", "user <list/add/edit/del/help>\033[0m (\033[1;36msudo\033[0m required)"},
+                        {"Reworked", "\033[1;34m", "perm <list/edit/info/help>\033[0m (\033[1;36msudo\033[0m required)"}
+                    }
+                },
+                {
+                    "0.0.0.4.2",
+                    {
+                        {"Added", "\033[1;30m", "Spinning Ghost Idle Animation"},
+                        {"Added", "\033[1;30m", "Early Versions of GeistOS GUI"},
+                        {"Added", "\033[1;34m", "win"}
+                    }
+                },
+                {
+                    "0.0.0.4.3",
+                    {
+                        {"Added", "\033[1;34m", "Letter Library for print Cmd"},
+                        {"Added", "\033[1;34m", "print <word to print>"}
+                    }
+                }
             }
         });
 
         allVersions.push_back({
             "0.0.0.5",
             {
-                {"Reworked", "\033[1;30m", "Spinning Ghost Idle Animation"}, 
-                {"Disabled", "\033[1;30m", "Spinning 3D Ghost Idle Animation"}, 
-                {"Added", "\033[1;34m", "sys version <history/cur>"},
-                {"Added", "\033[1;34m", "sys log <show/clear>"}
+                {
+                    "0.0.0.5.1",
+                    {
+                        {"Reworked", "\033[1;30m", "Spinning Ghost Idle Animation"}, 
+                        {"Disabled", "\033[1;30m", "Spinning 3D Ghost Idle Animation"}
+                    }
+                },
+                {
+                    "0.0.0.5.2",
+                    {
+                        {"Added", "\033[1;34m", "sys version <history/cur>"},
+                        {"Added", "\033[1;34m", "sys log <show/clear>"}
+                    }
+                }
             }
         });
 
         allVersions.push_back({
             "0.0.0.6",
             {
-                {"Reworked", "\033[1;30m", "User Rank System"},
-                {"Reworked", "\033[1;30m", "User Settings Menu"},
-                {"Added", "\033[1;34m", "A lot of Features to the sys Command"},
-                {"Info", "\033[1;30m", "Type 'sys help' to see all features"},
-                {"Added", "\033[1;34m", "Pipes that run multiple commands at once"},
-                {"Reworked", "\033[1;30m", "The Help Screen with fresh colors and new Backend"},
-                {"Added", "\033[1;34m", "The Date Command with a beautiful Table View"},
-                {"Reworked", "\033[1;30m", "The Date Command with a modular Design"},
-                {"Reworked", "\033[1;30m", "The Logic of the 'help' and the 'sys versions' command to be more modular"},
-                {"Added", "\033[1;34m", "A central Config class that the 'help' and 'sys version' command get the data from"},
-                {"Added", "\033[1;34m", "A new 'games' command that has different groups of games"},
-                {"Added", "\033[1;34m", "The section 'casino' to the 'games' command"},
-                {"Added", "\033[1;34m", "The Games 'roulette', 'Dice Rolling Game' and 'Slots' to the 'games casino' command"},
-                {"Added", "\033[1;34m", "A new 'bank' command"}
+                {
+                    "0.0.0.6.1",
+                    {
+                        {"Reworked", "\033[1;30m", "User Rank System"},
+                        {"Reworked", "\033[1;30m", "User Settings Menu"},
+                        {"Added", "\033[1;34m", "A lot of Features to the sys Command"},
+                        {"Info", "\033[1;30m", "Type 'sys help' to see all features"},
+                        {"Added", "\033[1;34m", "Pipes that run multiple commands at once"}
+                    }
+                },
+                {
+                    "0.0.0.6.2",
+                    {
+                        {"Reworked", "\033[1;30m", "The Help Screen with fresh colors and new Backend"},
+                        {"Added", "\033[1;34m", "The Date Command with a beautiful Table View"},
+                        {"Reworked", "\033[1;30m", "The Date Command with a modular Design"}
+                    }
+                },
+                {
+                    "0.0.0.6.3",
+                    {
+                        {"Reworked", "\033[1;30m", "The Logic of the 'help' and the 'sys versions' command to be more modular"},
+                        {"Added", "\033[1;34m", "A central Config class that the 'help' and 'sys version' command get the data from"}
+                    }
+                },
+                {
+                    "0.0.0.6.4",
+                    {
+                        {"Added", "\033[1;34m", "A new 'games' command that has different groups of games"},
+                        {"Added", "\033[1;34m", "The section 'casino' to the 'games' command"},
+                        {"Added", "\033[1;34m", "The Games 'roulette', 'Dice Rolling Game' and 'Slots' to the 'games casino' command"},
+                        {"Added", "\033[1;34m", "A new 'bank' command"}
+                    }
+                },
+                {
+                    "0.0.0.6.5",
+                    {
+                        {"Reworked", "\033[1;30m", "The 'sys version history' command with fresh visuals and clear versions and subVersions"},
+                        {"Reworked", "\033[1;30m", "The Logic of the main function to be more modular and easy to modify"}
+                    }
+                }
             }
         });
     }
@@ -2364,21 +2457,39 @@ private:
         allVersions = config.getAllVersions();
     }
 
-    void printVersion(std::string version) {
+    void printVersion(const std::string& version) {
         curVersion = version;
-        std::cout << currentColor + "   \033[0;37mGeistOS v\033[1;0m\033[0;35m" + version + "\033[0;0m:\n";
+
+        std::cout << currentColor
+                << "\n   === \033[1;37mGeistOS\033[0m "
+                << "\033[1;35mV" << version << "\033[0m "
+                << "===\n";
     }
 
-    void printUpdate(std::string prefix, std::string color, std::string change) {
-        std::cout << currentColor + "       \033[1;30m" + prefix + "\033[1;0m " + color + change + "\033[0m\n";
+    void printSubVersion(const std::string& version) {
+        curVersion = version;
+
+        std::cout << currentColor
+                << "   |-- \033[1;36mV" << version << "\033[0m\n";
+    }
+
+    void printUpdate(const std::string& prefix, const std::string& color, const std::string& change) {
+        std::cout << currentColor
+                << "   |   |-- \033[1;30m[" << prefix << "]\033[0m "
+                << color << change
+                << "\033[0m\n";
     }
 
     void printVersionHistory() {
         for (const auto& version : allVersions) {
             printVersion(version.title);
 
-            for (const auto& change : version.changes) {
-                printUpdate(change.type, change.color, change.description);
+            for (const auto& subVersion : version.subVersions) {
+                printSubVersion(subVersion.title);
+
+                for (const auto& change : subVersion.changes) {
+                    printUpdate(change.type, change.color, change.description);
+                }
             }
         }
     }
@@ -2711,8 +2822,10 @@ private:
     struct Transaction {
         int id;
         std::string type;
+        std::string operation;
         int amount;
         std::string timestamp;
+        int balanceBefore;
         int balanceAfter;
     };
 
@@ -2749,11 +2862,26 @@ private:
     }
 
     void addTransaction(const std::string& type, int amount) {
+        std::string operation;
+        
+        int balanceBefore = balance;
+
+        if (type == "Withdraw") {
+            operation = REDR + std::string("-");
+            balanceBefore += amount;
+        }
+        else if (type == "Deposit ") {
+            operation = GREENR + std::string("+");
+            balanceBefore -= amount;
+        }
+
         Transaction t;
         t.id = nextId++;
         t.type = type;
+        t.operation = operation;
         t.amount = amount;
         t.timestamp = getTimeStamp();
+        t.balanceBefore = balanceBefore;
         t.balanceAfter = balance;
 
         history.push_back(t);
@@ -2770,13 +2898,13 @@ public:
         if (amount > balance) return false;
 
         balance -= amount;
-        addTransaction("WITHDRAW", amount);
+        addTransaction("Withdraw", amount);
         return true;
     }
 
     void deposit(int amount) {
         balance += amount;
-        addTransaction("DEPOSIT", amount);
+        addTransaction("Deposit ", amount);
     }
 
     void print() const {
@@ -2789,12 +2917,17 @@ public:
 
     void printHistory() const {
         for (const auto& t : history) {
-            std::cout << "#" << t.id
-                      << " [" << t.timestamp << "] "
-                      << t.type
-                      << " " << t.amount
-                      << " | Balance: " << t.balanceAfter
-                      << "\n";
+            std::cout << std::left
+                    << RESETR << std::setw(4)  << ("#" + std::to_string(t.id))
+                    << RESETR << std::setw(22) << ("[" + t.timestamp + "]")
+                    << RESETR << std::setw(9) << t.type
+                    << RESETR << " | "
+                    << RESETR << std::setw(20) << (t.operation + formatBalance(t.amount))
+                    << RESETR << " | "
+                    << RESETR << std::setw(20) << ("Old Balance: " + formatBalance(t.balanceBefore))
+                    << RESETR << " | "
+                    << RESETR << std::setw(20) << ("New Balance: " + formatBalance(t.balanceAfter))
+                    << RESETR << "\n";
         }
     }
 };
@@ -3245,11 +3378,7 @@ public:
     void showMenu() {
         std::cout << "\033[2J\033[H";
 
-        std::cout << GREEN;
-        std::cout << "============================\n";
-        std::cout << "           CASINO           \n";
-        std::cout << "============================\n";
-        std::cout << RESET;
+        printScreen("Casino");
 
         bank.print();
         std::cout << "\n";
@@ -3361,6 +3490,7 @@ void cmd_bank(const std::vector<std::string>& args, Terminal& term) {
     };
 
     auto getNext = [&]() {
+        std::cout << "\n";
         std::cout << currentColor << "Press Enter to Continue ...";
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         std::cin.get();
@@ -3371,24 +3501,24 @@ void cmd_bank(const std::vector<std::string>& args, Terminal& term) {
     while (true) {
         std::vector<MenuItem> menu = {
             {
-                "Balance anzeigen",
+                "Show Balance",
                 [&]() {
                     bank.print();
                     getNext();
                 }
             },
             {
-                "Transaktionen anzeigen",
+                "Show Transactions",
                 [&]() {
                     bank.printHistory();
                     getNext();
                 }
             },
             {
-                "Einzahlen",
+                "Deposit",
                 [&]() {
                     int amount;
-                    std::cout << "Betrag: ";
+                    std::cout << "Amount: ";
                     std::cin >> amount;
 
                     bank.deposit(amount);
@@ -3398,16 +3528,16 @@ void cmd_bank(const std::vector<std::string>& args, Terminal& term) {
                 }
             },
             {
-                "Auszahlen",
+                "Withdraw",
                 [&]() {
                     int amount;
-                    std::cout << "Betrag: ";
+                    std::cout << "Amount: ";
                     std::cin >> amount;
 
                     if (bank.withdraw(amount)) {
                         std::cout << "OK\n";
                     } else {
-                        std::cout << "Zu wenig Guthaben\n";
+                        std::cout << "Not enough Balance\n";
                     }
 
                     getNext();
@@ -3417,14 +3547,15 @@ void cmd_bank(const std::vector<std::string>& args, Terminal& term) {
 
         clearScreen();
 
-        std::cout << "\n=== BANK MENU ===\n";
+        printScreen("Bank");
+
         std::cout << "0. Exit\n";
 
         for (size_t i = 0; i < menu.size(); i++) {
             std::cout << i + 1 << ". " << menu[i].label << "\n";
         }
 
-        std::cout << "Auswahl: ";
+        std::cout << "Choice: ";
 
         int choice;
         std::cin >> choice;
@@ -3435,10 +3566,12 @@ void cmd_bank(const std::vector<std::string>& args, Terminal& term) {
         }
 
         if (choice < 0 || choice > (int)menu.size()) {
-            std::cout << "Ungültig\n";
+            std::cout << "Invalid Number\n";
             getNext();
             continue;
         }
+
+        std::cout << "\n";
 
         menu[choice - 1].action();
     }
@@ -3466,7 +3599,218 @@ void cmd_bank(const std::vector<std::string>& args, Terminal& term) {
 
 
 
+struct Permissions {
+    bool read = false;
+    bool write = false;
+    bool exec = false;
+    bool sudo = false;
+};
 
+struct Command {
+    std::string name;
+    std::function<std::string(const std::vector<std::string>&, const std::string&)> func;
+    Permissions perms;
+};
+
+class CommandManager {
+public:
+    CommandManager(Terminal& term) : terminal(term) {
+        initCommands();
+    }
+
+    void registerAll() {
+        for (const auto& cmd : commands) {
+            terminal.registerCommand(
+                cmd.name,
+                cmd.func,
+                cmd.perms.read,
+                cmd.perms.write,
+                cmd.perms.exec,
+                cmd.perms.sudo
+            );
+        }
+    }
+
+private:
+    Terminal& terminal;
+    std::vector<Command> commands;
+
+    void initCommands() {
+
+        commands = {
+
+            {"help", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_help(args);
+                return "";
+            }, 
+            {}},
+
+            {"clear", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_clear(args);
+                return "";
+            },
+            {}},
+
+            {"echo", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_echo(args);
+                return "";
+            }, 
+            {}},
+
+            {"ls", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_ls(args);
+                return "";
+            }, 
+            {}},
+
+            {"exit", [this](const auto& args, const std::string& input){
+                (void)args; (void)input;
+                std::cout << currentColor << "Stopping Terminal...\n";
+                terminal.stop();
+                return "";
+            }, 
+            {}},
+
+            {"logout", [this](const auto& args, const std::string& input){
+                (void)args; (void)input;
+                while (!terminal.loginPrompt()) {}
+                terminal.run();
+                return "";
+            }, 
+            {}},
+
+            {"ping", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_ping(args);
+                return "";
+            }, 
+            {false, false, true, false}},
+
+            {"dir", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_dir(args);
+                return "";
+            }, 
+            {true}},
+
+            {"cd", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_cd(args);
+                return "";
+            }, 
+            {true}},
+
+            {"mkdir", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_mkdir(args);
+                return "";
+            }, 
+            {false, true}},
+
+            {"rm", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_rm(args);
+                return "";
+            }, 
+            {true}},
+
+            {"touch", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_touch(args);
+                return "";
+            }, 
+            {true, true}},
+
+            {"vim", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_vim(args);
+                return "";
+            }, 
+            {true, true}},
+
+            {"apt", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_apt_install(args);
+                return "";
+            }, 
+            {true, true, false, true}},
+
+            {"color", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_color(args);
+                return "";
+            }, 
+            {}},
+
+            {"passwd", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_passwd(args, terminal);
+                return "";
+            }, 
+            {true, true, true, true}},
+
+            {"perm", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_perm(args, terminal);
+                return "";
+            }, 
+            {true, true, true, true}},
+
+            {"user", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_user(args, terminal);
+                return "";
+            }, 
+            {true, true, true, true}},
+
+            {"print", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_print(args, terminal);
+                return "";
+            }, 
+            {true, true}},
+
+            {"win", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_win(args, terminal);
+                return "";
+            }, 
+            {}},
+
+            {"date", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_date(args, terminal);
+                return "";
+            }, 
+            {}},
+
+            {"sys", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_sys(args, terminal);
+                return "";
+            }, 
+            {}},
+
+            {"games", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_games(args, terminal);
+                return "";
+            }, 
+            {}},
+
+            {"bank", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_bank(args, terminal);
+                return "";
+            }, 
+            {}}
+        };
+    }
+};
 
 
 // ==========================
@@ -3475,8 +3819,11 @@ void cmd_bank(const std::vector<std::string>& args, Terminal& term) {
 int main() {
     Terminal terminal;
 
+    CommandManager manager(terminal);
+    manager.registerAll();
+
     // normale Befehle
-    terminal.registerCommand("help", 
+    /*terminal.registerCommand("help", 
         [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
             (void)input;
             cmd_help(args);
@@ -3674,7 +4021,7 @@ int main() {
             cmd_bank(args, terminal);
             return "";
         }
-    );
+    );*/
 
     // === Login beim Start ===
     while (!terminal.loginPrompt()) {}
