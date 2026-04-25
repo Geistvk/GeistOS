@@ -29,6 +29,8 @@
 #include "UIElements/Window.h"
 #include "UIElements/Window.cpp"
 
+#include <functional>
+
 #include <thread>
 #include <chrono>
 #include <cstdlib>
@@ -1023,6 +1025,13 @@ private:
                     {
                         {"Reworked", "\033[1;30m", "The 'sys version history' command with fresh visuals and clear versions and subVersions"},
                         {"Reworked", "\033[1;30m", "The Logic of the main function to be more modular and easy to modify"}
+                    }
+                },
+                {
+                    "0.0.0.6.6",
+                    {
+                        {"Added", "\033[1;34m", "The AsciiGraph Class to manage and render Graphes in pure Text"},
+                        {"Added", "\033[1;34m", "A new 'graph' command to test the AsciiGraph Class"}
                     }
                 }
             }
@@ -2818,6 +2827,8 @@ public:
 class Bank {
 private:
     int balance;
+    std::string depositString = "Deposit";
+    std::string widthdrawString = "Withdraw";
 
     struct Transaction {
         int id;
@@ -2866,11 +2877,11 @@ private:
         
         int balanceBefore = balance;
 
-        if (type == "Withdraw") {
+        if (type == widthdrawString) {
             operation = REDR + std::string("-");
             balanceBefore += amount;
         }
-        else if (type == "Deposit ") {
+        else if (type == depositString) {
             operation = GREENR + std::string("+");
             balanceBefore -= amount;
         }
@@ -2898,13 +2909,13 @@ public:
         if (amount > balance) return false;
 
         balance -= amount;
-        addTransaction("Withdraw", amount);
+        addTransaction(widthdrawString, amount);
         return true;
     }
 
     void deposit(int amount) {
         balance += amount;
-        addTransaction("Deposit ", amount);
+        addTransaction(depositString, amount);
     }
 
     void print() const {
@@ -3592,6 +3603,283 @@ void cmd_bank(const std::vector<std::string>& args, Terminal& term) {
 
 
 
+class AsciiGraph {
+private:
+    struct point {
+        std::string label;
+        double y;
+    };
+
+    struct Point {
+        double x;
+        double y;
+    };
+
+    std::vector<Point> points;
+    std::vector<std::string> xLabels;
+
+    int width;
+    int plotWidth;
+    int height;
+
+    int cellWidth = 3;
+
+    std::vector<std::string> grid;
+
+    double minX, maxX;
+    double minY, maxY;
+
+    void computeBounds() {
+        minX = maxX = points[0].x;
+        minY = maxY = points[0].y;
+
+        for (const auto& p : points) {
+            minX = std::min(minX, p.x);
+            maxX = std::max(maxX, p.x);
+            minY = std::min(minY, p.y);
+            maxY = std::max(maxY, p.y);
+        }
+
+        if (minY == maxY) {
+            minY -= 1;
+            maxY += 1;
+        }
+
+        if (minX == maxX) {
+            minX -= 1;
+            maxX += 1;
+        }
+    }
+
+    std::vector<double> computeTicks() const {
+        std::vector<double> ticks;
+
+        double range = maxY - minY;
+        if (range <= 0) return {minY};
+
+        double rawStep = range / 5.0;
+
+        double mag = std::pow(10, std::floor(std::log10(rawStep)));
+        double norm = rawStep / mag;
+
+        double step;
+
+        if (norm < 1.5) step = 1 * mag;
+        else if (norm < 3) step = 2 * mag;
+        else if (norm < 7) step = 3 * mag;
+        else step = 10 * mag;
+
+        double start = std::floor(minY / step) * step;
+
+        for (double v = start; v <= maxY; v += step) {
+            ticks.push_back(v);
+        }
+
+        return ticks;
+    }
+
+    static double computeStep(double minY, double maxY) {
+        double range = maxY - minY;
+        double rawStep = range / 6.0;
+
+        double mag = std::pow(10, std::floor(std::log10(rawStep)));
+        double norm = rawStep / mag;
+
+        if (norm < 1.5) return 1 * mag;
+        if (norm < 3)   return 2 * mag;
+        if (norm < 7)   return 5 * mag;
+        return 10 * mag;
+    }
+
+    int mapX(double x) const {
+        double t = (x - minX) / (maxX - minX);
+        return (int)(t * (width * cellWidth - 1));
+    }
+
+    int mapY(double y) const {
+        return (int)((1.0 - (y - minY) / (maxY - minY)) * (height - 1));
+    }
+
+    int mapTickToRow(double tick) const {
+        return (int)((maxY - tick) / (maxY - minY) * (height - 1));
+    }
+
+    void initGrid() {
+        grid.assign(height, std::string(width * cellWidth, ' '));
+    }
+
+    void setPoint(int x, int y, char c) {
+        if (x < 0 || x >= width * cellWidth || y < 0 || y >= height) return;
+
+        grid[y][x] = c;
+    }
+
+    void drawLine(int x0, int y0, int x1, int y1) {
+        int dx = std::abs(x1 - x0);
+        int dy = std::abs(y1 - y0);
+
+        int sx = (x0 < x1) ? 1 : -1;
+        int sy = (y0 < y1) ? 1 : -1;
+
+        int err = dx - dy;
+
+        while (true) {
+            if (x0 == x1 && y0 == y1) break;
+            
+            setPoint(x0, y0, '*');
+
+            int err2 = err;
+
+            if (err2 > -dy) {
+                err -= dy;
+                x0 += sx;
+            } else if (err2 < dx) {
+                err += dx;
+                y0 += sy;
+            }
+        }
+    }
+
+public:
+    AsciiGraph(int h = 20)
+        : height(h) {}
+
+    void addPoints(std::vector<point> allPoints) {
+        for (size_t i = 0; i < allPoints.size(); i++) {
+            points.push_back({(double)i, allPoints[i].y});
+            xLabels.push_back(allPoints[i].label);
+        }
+    }
+
+    void setXLabels(const std::vector<std::string>& labels) {
+        xLabels = labels;
+    }
+
+    void prepare() {
+        computeBounds();
+
+        width = (int)points.size();
+        plotWidth = width * cellWidth;
+        if (width < 2) width = 2;
+
+        initGrid();
+    }
+
+    void drawAxes() {
+        int zeroY = mapY(0);
+        int zeroX = mapX(0);
+
+        for (int x = 0; x < width * cellWidth; x++) {
+            if (zeroY >= 0 && zeroY < height) {
+                grid[zeroY][x] = '-';
+            }
+        }
+
+        if (zeroX >= 0 && zeroX < width &&
+            zeroY >= 0 && zeroY < height) {
+            grid[zeroY][zeroX * cellWidth + 1] = '+';
+        }
+    }
+
+    void plot() {
+        grid.assign(height, std::string(plotWidth, ' '));
+
+        for (size_t i = 0; i + 1 < points.size(); i++) {
+            int x0 = mapX(points[i].x);
+            int y0 = mapY(points[i].y);
+
+            int x1 = mapX(points[i + 1].x);
+            int y1 = mapY(points[i + 1].y);
+
+            drawLine(x0, y0, x1, y1);
+        }
+    }
+
+    void print() const {
+        std::string spacing = "       ";
+        double step = computeStep(minY, maxY);
+
+        int tickSpacing = height / 6;
+        if (tickSpacing < 1) tickSpacing = 1;
+
+        for (int y = 0; y < height; y++) {
+
+            bool isTick = (y % tickSpacing == 0);
+
+            if (isTick) {
+                double value = maxY - (double)y / (height - 1) * (maxY - minY);
+
+                double rounded = std::round(value / step) * step;
+
+                std::cout << std::setw(6)
+                        << std::fixed << std::setprecision(2)
+                        << rounded << " |";
+            } else {
+                std::cout << spacing << "|";
+            }
+
+            std::cout << grid[y] << "\n";
+        }
+
+        std::cout << spacing << "+";
+
+        for (int i = 0; i < width * cellWidth; i++) {
+            std::cout << "-";
+        }
+
+        std::cout << "\n" << spacing << " ";
+
+        for (int i = 0; i < width; i++) {
+            std::string label;
+
+            if (i < (int)xLabels.size()) {
+                label = xLabels[i];
+            } else {
+                label = std::to_string(i);
+            }
+
+            int padding = cellWidth - (int)label.size();
+            int left = padding / 2;
+
+            for (int j = 0; j < left; j++) std::cout << " ";
+            std::cout << label;
+            for (int j = 0; j < padding - left; j++) std::cout << " ";
+        }
+
+        std::cout << "\n";
+    }
+};
+
+
+
+
+void cmd_graph(const std::vector<std::string>& args, Terminal& term) {
+    (void) args; (void) term;
+    
+    AsciiGraph g(16);
+
+    g.addPoints( 
+        {
+            {"A", 1},
+            {"B", 3},
+            {"C", 2},
+            {"D", 5},
+            {"E", 4},
+            {"F", 6},
+            {"G", 3},
+            {"H", 2},
+            {"I", 4},
+            {"J", 5},
+            {"K", 6}
+        }
+    );
+
+    g.prepare();
+    g.drawAxes();
+    g.plot();
+    g.print();
+}
+
 
 
 
@@ -3805,6 +4093,13 @@ private:
             {"bank", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_bank(args, terminal);
+                return "";
+            }, 
+            {}},
+
+            {"graph", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_graph(args, terminal);
                 return "";
             }, 
             {}}
