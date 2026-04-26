@@ -367,8 +367,6 @@ void idleMonitor()
 }
 
 auto systemStart = std::chrono::steady_clock::now();
-std::string cmdLog = "";
-int cmdLogId = 1;
 
 // ==========================
 // Terminal-Klasse 
@@ -383,12 +381,28 @@ private:
         bool requiresSudo;
     };
 
+    struct log {
+        int logId;
+        std::string timestamp;
+        std::string cmd;
+    };
+
     bool running = true;
     std::map<std::string, Command> commands;
 
     std::string error = "none";
     std::unordered_map<std::string, User> users;
     User* currentUser = nullptr;
+
+    std::vector<log> cmdLog = {};
+    int cmdLogId = 1;
+
+    std::string standard   = "\033[0m";
+    std::string textColor1 = getAnsiColor('1');
+    std::string textColor2 = getAnsiColor('3');
+    std::string errorColor = getAnsiColor('4');
+    std::string accentColor= getAnsiColor('6');
+    std::string sudoColor  = getAnsiColor('B');
 public:
     Terminal() {
         users["root"] = {0, "Root", "Root", "root", "root123", "2024", "Owner", "1111"};
@@ -415,6 +429,17 @@ public:
         }
     }
 
+    static std::string getTimeStamp() {
+        auto now = std::chrono::system_clock::now();
+        std::time_t t = std::chrono::system_clock::to_time_t(now);
+
+        std::tm tm = *std::localtime(&t);
+
+        std::ostringstream oss;
+        oss << std::put_time(&tm, "%d.%m.%Y %H:%M:%S");
+        return oss.str();
+    }
+
     bool loginPrompt() {
         SetConsoleTitleA("Geist OS");
 
@@ -435,7 +460,7 @@ public:
         std::getline(std::cin, username);
 
         if (users.find(username) == users.end()) {
-            error = "\033[0;31mUsername incorrect.\033[0m\n";
+            error = errorColor + "Username incorrect.\n" + standard;
             return false;
         }
 
@@ -455,7 +480,7 @@ public:
             std::cout << currentColor + "Welcome, \033[1;32m" << username << "\033[0m!\n\n";
             return true;
         } else {
-            error = "\033[0;31mPassword incorrect.\033[0m\n";
+            error = errorColor + "Password incorrect.\n" + standard;
             return false;
         }
     }
@@ -527,7 +552,7 @@ public:
 
                     if (tokens[0] == "sudo") {
                         if (tokens.size() < 2) {
-                            std::cout << "sudo: no command specified\n";
+                            std::cout << sudoColor << "sudo" << standard << ": no command specified\n";
                             error = true;
                             break;
                         }
@@ -538,7 +563,7 @@ public:
 
                     auto it = commands.find(tokens[0]);
                     if (it == commands.end()) {
-                        std::cout << "Unknown command: " << tokens[0] << "\n";
+                        std::cout << errorColor << "Unknown command" << standard << ": " << tokens[0] << "\n";
                         error = true;
                         break;
                     }
@@ -549,7 +574,7 @@ public:
                         (cmd.requiresWrite && !handleRights(currentUser->userRights, 1)) ||
                         (cmd.requiresExecute && !handleRights(currentUser->userRights, 2)))
                     {
-                        std::cout << "Permission denied\n";
+                        std::cout << errorColor << "Permission denied\n";
                         error = true;
                         break;
                     }
@@ -564,7 +589,7 @@ public:
                             break;
                         }
 
-                        std::cout << "[sudo] password: ";
+                        std::cout << "[" << sudoColor << "sudo" << standard << "] password: ";
                         std::string pass = getHiddenInput();
 
                         if (pass != currentUser->password) {
@@ -577,7 +602,11 @@ public:
                     std::string output;
 
                     try {
-                        cmdLog += std::to_string(cmdLogId++) + ". " + segment + "\n";
+                        cmdLog.push_back({
+                            cmdLogId++,
+                            getTimeStamp(),
+                            segment
+                        });
 
                         output = cmd.func(tokens, safeInput);
                     } catch (const std::bad_alloc&) {
@@ -615,11 +644,18 @@ public:
     }
 
     void getCmdLog() {
-        std::cout << currentColor << cmdLog;
+        for (size_t i = 0; i < cmdLog.size(); i++) {
+            std::cout   << textColor2   << cmdLog[i].logId
+                        << standard     << ". [ "
+                        << accentColor  << cmdLog[i].timestamp
+                        << standard     << " ] "
+                        << textColor1   << cmdLog[i].cmd
+                        << standard     << "\n";
+        }
     }
 
     void clearCmdLog() {
-        cmdLog = "";
+        cmdLog.clear();
         cmdLogId = 1;
     }
 
@@ -1031,7 +1067,8 @@ private:
                     "0.0.0.6.6",
                     {
                         {"Added", "\033[1;34m", "The AsciiGraph Class to manage and render Graphes in pure Text"},
-                        {"Added", "\033[1;34m", "A new 'graph' command to test the AsciiGraph Class"}
+                        {"Added", "\033[1;34m", "A new 'graph' command to test the AsciiGraph Class"},
+                        {"Added", "\033[1;34m", "The ProgressBar Class to add Progressbars with custom width"}
                     }
                 }
             }
@@ -1063,6 +1100,7 @@ private:
     std::string standard   = getAnsiColor('8');
     std::string textColor1 = getAnsiColor('1');
     std::string textColor2 = getAnsiColor('3');
+    std::string errorColor = getAnsiColor('4');
     std::string catTitle   = getAnsiColor('D');
     std::string sudoColor  = getAnsiColor('B');
 
@@ -1090,13 +1128,41 @@ private:
         std::cout << standard << "\n";
     }
 
+    void printCmds() {
+        int catIndex = 0;
+        for (const auto& category : categories) {
+            printCategory(category.title);
+
+            if (catIndex > 0) {
+                for (const auto& cmd : category.lines) {
+                    printHelp(cmd.cmd, cmd.args, cmd.sudo, cmd.suffix);
+                }
+            } else {
+                printStandardCmds(category.lines);
+            }
+
+            catIndex++;
+        }
+    }
+
+    void initCategories() {
+        categories = config.getHelpCategories();
+    }
+
+public:
     void printHelp(
         const std::string& cmd,
         const std::vector<std::string>& list,
         bool sudo = false,
-        const std::string& suffix = ""
+        const std::string& suffix = "",
+        bool isUsage = false
     ) {
-        std::cout << textColor1 << "  " << cmd;
+        if (!isUsage) std::cout << textColor1 << "  " << cmd;
+        else if (isUsage) std::cout << errorColor   << "Invalid Usage!\n" 
+                                    << errorColor   << "Usage" 
+                                    << standard     << ":" 
+                                    << textColor1   << " " 
+                                    << cmd;
 
         if (!list.empty()) {
             std::cout << standard << " <";
@@ -1106,8 +1172,10 @@ private:
             int totalCharLength = 0;
 
             auto handleOverflow = [&]() {
+                size_t spacing = cmd.size();
+                if (isUsage) spacing += 5;
                 std::cout << standard << "\n   ";
-                for (size_t u = 0; u <= cmd.size(); u++) {
+                for (size_t u = 0; u <= spacing; u++) {
                     std::cout << standard << " ";
                 }
                 listIndex = 0;
@@ -1139,7 +1207,7 @@ private:
             std::cout << standard << ">";
         }
 
-        if (!suffix.empty()) {
+        if (suffix != "") {
             std::cout << standard << " " << suffix;
         }
 
@@ -1150,41 +1218,16 @@ private:
         std::cout << standard << "\n";
     }
 
-    void printCmds() {
-        int catIndex = 0;
-        for (const auto& category : categories) {
-            printCategory(category.title);
-
-            if (catIndex > 0) {
-                for (const auto& cmd : category.lines) {
-                    printHelp(cmd.cmd, cmd.args, cmd.sudo, cmd.suffix);
-                }
-            } else {
-                printStandardCmds(category.lines);
-            }
-
-            catIndex++;
-        }
-    }
-
-    void initCategories() {
-        categories = config.getHelpCategories();
-    }
-
-public:
     void render() {
         initCategories();
         printCmds();
     }
 };
 
-// ==========================
-// Befehle
-// ==========================
+Help help;
+
 void cmd_help(const std::vector<std::string>& args) {
     (void)args;
-
-    Help help;
 
     printScreen("Help");
     std::cout << currentColor + "Available Commands:\n";
@@ -1209,7 +1252,7 @@ void cmd_echo(const std::vector<std::string>& args) {
 
 void cmd_color(const std::vector<std::string>& args) {
     if (args.size() < 2) {
-        std::cout << currentColor + "Usage: \033[1;34mcolor <hex-code>\033[0m (0-F)\n";
+        help.printHelp("color", {"hex-code"}, false, "(0-F)", true);
         return;
     }
 
@@ -1319,7 +1362,8 @@ int randomNum(int min, int max) {
 
 void cmd_apt_install(const std::vector<std::string>& args) {
     if (args.size() < 2 || args.size() > 4) {
-        std::cout << currentColor + "Usage: sudo apt install <package>" << std::endl;
+        help.printHelp("sudo apt update/install", {"package"}, false, "", true);
+        return;
     }
 
     std::string pkg = args[2];
@@ -1408,7 +1452,7 @@ void cmd_apt_install(const std::vector<std::string>& args) {
             std::this_thread::sleep_for(std::chrono::milliseconds(sleepDist(gen)));
         }
     } else {
-        std::cout << currentColor + "Usage: sudo apt update/install <package>" << std::endl;
+        help.printHelp("sudo apt update/install", {"package"}, false, "", true);
     }
 }
 
@@ -1542,7 +1586,7 @@ void cmd_ls(const std::vector<std::string>& args) {
 
 void cmd_rm(const std::vector<std::string>& args) {
     if (args.size() < 2) {
-        std::cerr << "Usage: rm <filename|foldername>" << std::endl;
+        help.printHelp("rm", {"filename", "foldername"}, false, "", true);
         return;
     }
 
@@ -1778,6 +1822,11 @@ bool updateUserData(std::unordered_map<std::string, User>& users,
 }
 
 void cmd_perm(const std::vector<std::string>& args, Terminal& term, std::string error = "none") {
+    if (args.size() < 2) {
+        help.printHelp("perm", {"list", "edit", "info", "help"}, true, "", true);
+        return;
+    }
+
     if (error != "none") {
         User* currentUser = term.getCurrentUser();
         std::string prompt = "\033[1;32m" + currentUser->name + "@GeistOS\033[0m:\033[0;34m" + currentDictonary + "\033[0m$";
@@ -1946,7 +1995,7 @@ void cmd_perm(const std::vector<std::string>& args, Terminal& term, std::string 
 
 
     } else {
-        std::cout << currentColor + "Usage: \033[1;36msudo\033[0m \033[1;34mperm (list/edit/info/help)\033[0m\n";
+        help.printHelp("perm", {"list", "edit", "info", "help"}, true, "", true);
     }
 }
 
@@ -1974,8 +2023,12 @@ std::vector<EditOption> rankOptions = {
     {"Tester", "5"}
 };
 
-// sudo required: User Befehler
 void cmd_user(const std::vector<std::string>& args, Terminal& term, std::string error = "none") {
+    if (args.size() < 2) {
+        help.printHelp("user", {"list", "add", "edith", "del", "help"}, true, "", true);
+        return;
+    }
+
     if (args[1] == "list") {
         auto& users = term.getUsers();
         std::cout << currentColor + "All users:\n";
@@ -2195,7 +2248,7 @@ void cmd_user(const std::vector<std::string>& args, Terminal& term, std::string 
         std::cout << currentColor + "   - \033[1;36msudo\033[0m \033[1;34muser help\033[0m \033[0;33m(Show this Help)\033[0m \n";
         
     } else {
-        std::cout << currentColor + "Usage: \033[1;36msudo\033[0m \033[1;34muser (list/add/edit/del/help)\033[0m\n";
+        help.printHelp("user", {"list", "add", "edith", "del", "help"}, true, "", true);
     }
 }
 
@@ -2544,12 +2597,13 @@ int nextPID = 4;
 void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
 
     if (args.size() < 2) {
-        std::cout << currentColor
-        << C_WARN << "Usage: " << C_CMD
-        << "sys [info/uptime/time/tasks/run/kill/mem/cpu/config/host/update/clearcache/bench]"
-        << C_RESET << "\n";
+        help.printHelp("sys", {"info", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "config", "host", "update", "clearcache", "bench"}, false, "", true);
         return;
     } else if (args[1] == "version") {
+        if (args.size() < 3) {
+            help.printHelp("sys version", {"history", "cur"}, false, "", true);
+            return;
+        }
         if (args[2] == "history") {
             Versions versions;
 
@@ -2561,23 +2615,23 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
         } else if (args[2] == "cur") {
             std::cout << currentColor + "\033[1;30mCurrent Version\033[1;0m: \033[0;37mGeistOS v\033[1;0m\033[0;35m" + curVersion + "\033[0;0m:\n";
         } else {
-            std::cout << C_ERR << "Usage: " << C_CMD << "sys version <history/cur>" << C_RESET << "\n";
+            help.printHelp("sys version", {"history", "cur"}, false, "", true);
         }
     } else if (args[1] == "log") {
 
         if (args.size() < 3) {
-            std::cout << C_ERR << "Usage: " << C_CMD << "sys log <show/clear>" << C_RESET << "\n";
+            help.printHelp("sys log", {"show", "clear"}, false, "", true);
             return;
         }
 
         if (args[2] == "show") {
             printScreen("CMD History");
             term.getCmdLog();
-        }
-
-        else if (args[2] == "clear") {
+        } else if (args[2] == "clear") {
             term.clearCmdLog();
             std::cout << C_OK << "Log cleared." << C_RESET << "\n";
+        } else {
+            help.printHelp("sys log", {"show", "clear"}, false, "", true);
         }
     } else if (args[1] == "info") {
         curVersion = "0.0.0.6";
@@ -2612,7 +2666,7 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
         }
     } else if (args[1] == "kill") {
         if (args.size() < 3) {
-            std::cout << C_ERR << "Usage: " << C_CMD << "sys kill <pid>" << C_RESET << "\n";
+            help.printHelp("sys kill", {"pid"}, false, "", true);
             return;
         }
 
@@ -2627,7 +2681,7 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
         std::cout << C_OK << "Process " << pid << " killed." << C_RESET << "\n";
     } else if (args[1] == "run") {
         if (args.size() < 3) {
-            std::cout << C_ERR << "Usage: " << C_CMD << "sys run <name>" << C_RESET << "\n";
+            help.printHelp("sys run", {"name"}, false, "", true);
             return;
         }
 
@@ -2689,9 +2743,9 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
         } else {
             std::cout 
                 << C_ERR << "Invalid usage.\n"
-                << C_WARN << "Usage: " 
-                << C_CMD << "sys config [set <key> <value> | get <key>]\n"
                 << C_RESET;
+
+            help.printHelp("sys config", {"set <key> <value>", "get <key>"}, false, "", true);
 
             std::cout 
                 << C_TITLE << "\nAvailable keys:\n" 
@@ -2793,10 +2847,7 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
         << C_CMD  << "clearcache  " << C_RESET << "- " << C_VAL << "clear cache\n"
         << C_CMD  << "bench       " << C_RESET << "- " << C_VAL << "performance test\n";
     } else {
-        std::cout << C_ERR << "Unknown command.\n" 
-                << C_WARN << "Usage: " 
-                << C_CMD << "sys [info/uptime/time/tasks/run/kill/mem/cpu/config/host/update/clearcache/bench]" 
-                << C_RESET << "\n";
+        help.printHelp("sys", {"info", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "config", "host", "update", "clearcache", "bench"}, false, "", true);
     }
 }
 
@@ -3483,12 +3534,153 @@ void cmd_games(const std::vector<std::string>& args, Terminal& term) {
     }
 }
 
+
+
+
+
+
+
+
+
+
+class TermMenu {
+    private: 
+        struct MenuItem {
+            std::string label;
+            std::function<void()> action;
+        };
+
+        std::vector<MenuItem> menu;
+        std::string title;
+
+        void clearScreen() {
+            #ifdef _WIN32
+                system("cls");
+            #else
+                system("clear");
+            #endif
+        };
+
+        void getNext() {
+            std::cout << "\n";
+            std::cout << currentColor << "Press Enter to Continue ...";
+            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            std::cin.get();
+
+            clearScreen();
+        };
+
+        void render() {
+            printScreen(title);
+
+            std::cout << "0. Exit\n";
+
+            for (size_t i = 0; i < menu.size(); i++) {
+                std::cout << i + 1 << ". " << menu[i].label << "\n";
+            }
+        }
+
+    public: 
+        TermMenu(std::string menuTitle)
+            : title(menuTitle) {}
+
+        void setOptions(std::vector<MenuItem> newMenu) {
+            menu.clear();
+
+            menu = newMenu;
+        }
+
+        void start() {
+            while (true) {
+                render(); 
+
+                std::cout << "Choice: ";
+
+                int choice;
+                std::cin >> choice;
+
+                if (choice == 0) {
+                    clearScreen();
+                    break;
+                }
+
+                if (choice < 0 || choice > (int)menu.size()) {
+                    std::cout << "Invalid Number\n";
+                    getNext();
+                    continue;
+                }
+
+                std::cout << "\n";
+
+                menu[choice - 1].action();
+
+                getNext();
+            }
+        }
+};
+
+
+
+
+
+
 struct MenuItem {
     std::string label;
     std::function<void()> action;
 };
 
 void cmd_bank(const std::vector<std::string>& args, Terminal& term) {
+    (void)args;
+    (void)term;
+
+    TermMenu termMenu("Bank");
+
+    termMenu.setOptions(
+        {
+            {
+                "Show Balance",
+                [&]() {
+                    bank.print();
+                }
+            },
+            {
+                "Show Transactions",
+                [&]() {
+                    bank.printHistory();
+                }
+            },
+            {
+                "Deposit",
+                [&]() {
+                    int amount;
+                    std::cout << "Amount: ";
+                    std::cin >> amount;
+
+                    bank.deposit(amount);
+                    std::cout << "OK\n";
+                }
+            },
+            {
+                "Withdraw",
+                [&]() {
+                    int amount;
+                    std::cout << "Amount: ";
+                    std::cin >> amount;
+
+                    if (bank.withdraw(amount)) {
+                        std::cout << "OK\n";
+                    } else {
+                        std::cout << "Not enough Balance\n";
+                    }
+                }
+            }
+        }
+    );
+
+    termMenu.start();
+}
+
+void cmd_bankOld(const std::vector<std::string>& args, Terminal& term) {
     (void)args;
     (void)term;
 
@@ -3850,34 +4042,99 @@ public:
     }
 };
 
+class ProgressBar {
+    private: 
+        int total = 100;
+        int barWidth;
+
+    public: 
+        ProgressBar(int width)
+            :barWidth(width) {}
+
+        void print(int progress) {
+            float percent = (float)progress / total;
+            int pos = barWidth * percent;
+
+            std::cout << "[";
+            for (int i = 0; i < barWidth; ++i) {
+                if (i < pos)
+                    std::cout << "=";
+                else if (i == pos)
+                    std::cout << ">";
+                else
+                    std::cout << " ";
+            }
+            std::cout << "] " << int(percent * 100.0) << " %\r";
+            std::cout.flush();
+        }
+
+        void render() {
+            for (int i = 0; i <= total; ++i) {
+                print(i);
+                std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            }
+
+            std::cout << std::endl;
+        }
+};
+
+
+
+
+void printProgressBar(int progress, int total, int barWidth) {
+    float percent = (float)progress / total;
+    int pos = barWidth * percent;
+
+    std::cout << "[";
+    for (int i = 0; i < barWidth; ++i) {
+        if (i < pos)
+            std::cout << "=";
+        else if (i == pos)
+            std::cout << ">";
+        else
+            std::cout << " ";
+    }
+    std::cout << "] " << int(percent * 100.0) << " %\r";
+    std::cout.flush();
+}
 
 
 
 void cmd_graph(const std::vector<std::string>& args, Terminal& term) {
-    (void) args; (void) term;
+    (void) term;
+
+    if ((int) args.size() < 2) {
+        help.printHelp("graph", {"line", "bar"}, false, "", true);
+        return;
+    }
     
-    AsciiGraph g(16);
+    if (args[1] == "line") {
+        AsciiGraph g(16);
 
-    g.addPoints( 
-        {
-            {"A", 1},
-            {"B", 3},
-            {"C", 2},
-            {"D", 5},
-            {"E", 4},
-            {"F", 6},
-            {"G", 3},
-            {"H", 2},
-            {"I", 4},
-            {"J", 5},
-            {"K", 6}
-        }
-    );
+        g.addPoints( 
+            {
+                {"A", 1},
+                {"B", 3},
+                {"C", 2},
+                {"D", 5},
+                {"E", 4},
+                {"F", 6},
+                {"G", 3},
+                {"H", 2},
+                {"I", 4},
+                {"J", 5},
+                {"K", 6}
+            }
+        );
 
-    g.prepare();
-    g.drawAxes();
-    g.plot();
-    g.print();
+        g.prepare();
+        g.drawAxes();
+        g.plot();
+        g.print();
+    } else if (args[1] == "bar") {
+        ProgressBar bar(50);
+        bar.render();
+    }
 }
 
 
