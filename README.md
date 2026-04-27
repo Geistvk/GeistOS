@@ -83,23 +83,23 @@ void commandFunction(const std::vector<std::string>& args, Terminal& term) {
 }
 ```
 
-### 2. Register the command in `main`
+### 2. Register the command in `CommandManager`
 
-Add the following snippet at the end of your `main` function:
+Add the following snippet at the end of the `command` vector in the `CommandManager` class:
 
 ```cpp
-terminal.registerCommand(
-    "yourCommandName",
-    [&](const std::vector<std::string>& args, const std::string& input) -> std::string {
-        (void)input;
-        commandFunction(args, terminal);
-        return "Command Run Successfull";
-    },
-    false,  // User needs read rights
-    false,  // User needs write rights
-    false,  // User needs execute rights
-    false   // User needs sudo rights
-);
+{"yourCommandName", [this](const auto& args, const std::string& input){
+    (void)input;
+    commandFunction(args, terminal);
+    return "Command Run Successfull";
+    }, 
+    {
+        false,  // User needs read rights
+        false,  // User needs write rights
+        false,  // User needs execute rights
+        false   // User needs sudo rights
+    }
+}
 ```
 
 Now you just need to type "yourCommandName" in the OS in the Terminal and it will execute the function.
