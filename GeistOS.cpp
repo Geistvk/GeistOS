@@ -513,7 +513,7 @@ public:
                 std::cout << currentColor + prompt;
 
                 if (!std::getline(std::cin, input)) {
-                    std::cout << "\nInput stream closed\n";
+                    std::cout << errorColor << "\nInput stream closed\n";
                     std::cin.clear();
                     continue;
                 }
@@ -522,7 +522,7 @@ public:
                     continue;
 
                 if (input.size() > 50000) {
-                    std::cout << "Input too large\n";
+                    std::cout << errorColor << "Input too large\n";
                     continue;
                 }
 
@@ -534,6 +534,12 @@ public:
 
                 std::string pipeInput;
                 bool error = false;
+
+                cmdLog.push_back({
+                    cmdLogId++,
+                    getTimeStamp(),
+                    input
+                });
 
                 for (const auto& raw : pipeline)
                 {
@@ -584,7 +590,7 @@ public:
                     if (sudoMode || cmd.requiresSudo)
                     {
                         if (!handleRights(currentUser->userRights, 3)) {
-                            std::cout << "not in sudoers file\n";
+                            std::cout << errorColor << "You have no Sudo Permission\n";
                             error = true;
                             break;
                         }
@@ -593,7 +599,7 @@ public:
                         std::string pass = getHiddenInput();
 
                         if (pass != currentUser->password) {
-                            std::cout << "Sorry, try again.\n";
+                            std::cout << errorColor << "Sorry, wrong Password.\n";
                             error = true;
                             break;
                         }
@@ -602,23 +608,17 @@ public:
                     std::string output;
 
                     try {
-                        cmdLog.push_back({
-                            cmdLogId++,
-                            getTimeStamp(),
-                            segment
-                        });
-
                         output = cmd.func(tokens, safeInput);
                     } catch (const std::bad_alloc&) {
-                        std::cout << "Memory overflow in command: " << tokens[0] << "\n";
+                        std::cout << errorColor << "Memory overflow in command: " << tokens[0] << "\n";
                         error = true;
                         break;
                     } catch (const std::exception& e) {
-                        std::cout << "Error in command: " << e.what() << "\n";
+                        std::cout << errorColor << "Error in command: " << e.what() << "\n";
                         error = true;
                         break;
                     } catch (...) {
-                        std::cout << "Command crashed: " << tokens[0] << "\n";
+                        std::cout << errorColor << "Command crashed: " << tokens[0] << "\n";
                         error = true;
                         break;
                     }
@@ -626,7 +626,7 @@ public:
                     pipeInput = output;
 
                     if (pipeInput.size() > 200000) {
-                        std::cout << "Pipe overflow protection triggered\n";
+                        std::cout << errorColor << "Pipe overflow protection triggered\n";
                         error = true;
                         break;
                     }
@@ -828,6 +828,12 @@ protected:
         std::string title;
         std::vector<SubVersions> subVersions;
     };
+
+    std::string standard        = "\033[0m";
+    std::string addedColor      = getAnsiColor('1');
+    std::string reworkColor     = getAnsiColor('8');
+    std::string infoColor       = getAnsiColor('2');
+    std::string disabledColor   = getAnsiColor('4');
     
 private: 
     std::vector<Category> categories;
@@ -909,14 +915,14 @@ private:
                 {
                     "0.0.0.1.1",
                     {
-                        {"Added", "\033[1;30m", "Dynamic C++ Code for an Linux like OS"}
+                        {"Added", addedColor, "Dynamic C++ Code for an Linux like OS"}
                     }
                 },
                 {
                     "0.0.0.1.2",
                     {
-                        {"Added", "\033[1;34m", "help\033[0m, \033[1;34mclear\033[0m, \033[1;34mecho\033[0m, \033[1;34mls\033[0m, \033[1;34mexit"},
-                        {"Added", "\033[1;34m", "ping <ip>"}
+                        {"Added", addedColor, "help\033[0m, \033[1;34mclear\033[0m, \033[1;34mecho\033[0m, \033[1;34mls\033[0m, \033[1;34mexit"},
+                        {"Added", addedColor, "ping <ip>"}
                     }
                 }
             }
@@ -928,23 +934,23 @@ private:
                 {
                     "0.0.0.2.1",
                     {
-                        {"Added", "\033[1;34m", "dir /s"},
-                        {"Added", "\033[1;34m", "apt update/install <Package>\033[0m (\033[1;36msudo\033[0m required)"}
+                        {"Added", addedColor, "dir /s"},
+                        {"Added", addedColor, "apt update/install <Package>\033[0m (\033[1;36msudo\033[0m required)"}
                     }
                 },
                 {
                     "0.0.0.2.2",
                     {
-                        {"Added", "\033[1;34m", "cd <Folder Path or Folder Name>"},
-                        {"Added", "\033[1;34m", "mkdir <Folder Name>"}, 
-                        {"Added", "\033[1;34m", "rm <filename|foldername>\033[0m (\033[1;36msudo\033[0m required)"}
+                        {"Added", addedColor, "cd <Folder Path or Folder Name>"},
+                        {"Added", addedColor, "mkdir <Folder Name>"}, 
+                        {"Added", addedColor, "rm <filename|foldername>\033[0m (\033[1;36msudo\033[0m required)"}
                     }
                 },
                 {
                     "0.0.0.2.3",
                     {
-                        {"Added", "\033[1;34m", "touch <File Name>"},
-                        {"Added", "\033[1;34m", "vim <File Name>"}
+                        {"Added", addedColor, "touch <File Name>"},
+                        {"Added", addedColor, "vim <File Name>"}
                     }
                 }
             }
@@ -956,16 +962,16 @@ private:
                 {
                     "0.0.0.3.1", 
                     {
-                        {"Added", "\033[1;34m", "color <hex-code>\033[0m (0-F) {7 = default}"}
+                        {"Added", addedColor, "color <hex-code>\033[0m (0-F) {7 = default}"}
                     }
                 },
                 {
                     "0.0.0.3.2",
                     {
-                        {"Added", "\033[1;34m", "addUser <Username>"},
-                        {"Added", "\033[1;34m", "listUser <Username>"},
-                        {"Added", "\033[1;34m", "delUser <Username>"},
-                        {"Added", "\033[1;34m", "passwd\033[0m (\033[1;36msudo\033[0m required)"}
+                        {"Added", addedColor, "addUser <Username>"},
+                        {"Added", addedColor, "listUser <Username>"},
+                        {"Added", addedColor, "delUser <Username>"},
+                        {"Added", addedColor, "passwd\033[0m (\033[1;36msudo\033[0m required)"}
                     }
                 }
             }
@@ -977,23 +983,23 @@ private:
                 {
                     "0.0.0.4.1", 
                     {
-                        {"Updated", "\033[1;34m", "user <list/add/edit/del/help>\033[0m (\033[1;36msudo\033[0m required)"},
-                        {"Reworked", "\033[1;34m", "perm <list/edit/info/help>\033[0m (\033[1;36msudo\033[0m required)"}
+                        {"Reworked", reworkColor, "user <list/add/edit/del/help>\033[0m (\033[1;36msudo\033[0m required)"},
+                        {"Reworked", reworkColor, "perm <list/edit/info/help>\033[0m (\033[1;36msudo\033[0m required)"}
                     }
                 },
                 {
                     "0.0.0.4.2",
                     {
-                        {"Added", "\033[1;30m", "Spinning Ghost Idle Animation"},
-                        {"Added", "\033[1;30m", "Early Versions of GeistOS GUI"},
-                        {"Added", "\033[1;34m", "win"}
+                        {"Added", addedColor, "Spinning Ghost Idle Animation"},
+                        {"Added", addedColor, "Early Versions of GeistOS GUI"},
+                        {"Added", addedColor, "win"}
                     }
                 },
                 {
                     "0.0.0.4.3",
                     {
-                        {"Added", "\033[1;34m", "Letter Library for print Cmd"},
-                        {"Added", "\033[1;34m", "print <word to print>"}
+                        {"Added", addedColor, "Letter Library for print Cmd"},
+                        {"Added", addedColor, "print <word to print>"}
                     }
                 }
             }
@@ -1005,15 +1011,15 @@ private:
                 {
                     "0.0.0.5.1",
                     {
-                        {"Reworked", "\033[1;30m", "Spinning Ghost Idle Animation"}, 
-                        {"Disabled", "\033[1;30m", "Spinning 3D Ghost Idle Animation"}
+                        {"Reworked", reworkColor, "Spinning Ghost Idle Animation"}, 
+                        {"Disabled", disabledColor, "Spinning 3D Ghost Idle Animation"}
                     }
                 },
                 {
                     "0.0.0.5.2",
                     {
-                        {"Added", "\033[1;34m", "sys version <history/cur>"},
-                        {"Added", "\033[1;34m", "sys log <show/clear>"}
+                        {"Added", addedColor, "sys version <history/cur>"},
+                        {"Added", addedColor, "sys log <show/clear>"}
                     }
                 }
             }
@@ -1025,50 +1031,57 @@ private:
                 {
                     "0.0.0.6.1",
                     {
-                        {"Reworked", "\033[1;30m", "User Rank System"},
-                        {"Reworked", "\033[1;30m", "User Settings Menu"},
-                        {"Added", "\033[1;34m", "A lot of Features to the sys Command"},
-                        {"Info", "\033[1;30m", "Type 'sys help' to see all features"},
-                        {"Added", "\033[1;34m", "Pipes that run multiple commands at once"}
+                        {"Reworked", reworkColor, "User Rank System"},
+                        {"Reworked", reworkColor, "User Settings Menu"},
+                        {"Added", addedColor, "A lot of Features to the sys Command"},
+                        {"Info", infoColor, "Type 'sys help' to see all features"},
+                        {"Added", addedColor, "Pipes that run multiple commands at once"}
                     }
                 },
                 {
                     "0.0.0.6.2",
                     {
-                        {"Reworked", "\033[1;30m", "The Help Screen with fresh colors and new Backend"},
-                        {"Added", "\033[1;34m", "The Date Command with a beautiful Table View"},
-                        {"Reworked", "\033[1;30m", "The Date Command with a modular Design"}
+                        {"Reworked", reworkColor, "The Help Screen with fresh colors and new Backend"},
+                        {"Added", addedColor, "The Date Command with a beautiful Table View"},
+                        {"Reworked", reworkColor, "The Date Command with a modular Design"}
                     }
                 },
                 {
                     "0.0.0.6.3",
                     {
-                        {"Reworked", "\033[1;30m", "The Logic of the 'help' and the 'sys versions' command to be more modular"},
-                        {"Added", "\033[1;34m", "A central Config class that the 'help' and 'sys version' command get the data from"}
+                        {"Reworked", reworkColor, "The Logic of the 'help' and the 'sys versions' command to be more modular"},
+                        {"Added", addedColor, "A central Config class that the 'help' and 'sys version' command get the data from"}
                     }
                 },
                 {
                     "0.0.0.6.4",
                     {
-                        {"Added", "\033[1;34m", "A new 'games' command that has different groups of games"},
-                        {"Added", "\033[1;34m", "The section 'casino' to the 'games' command"},
-                        {"Added", "\033[1;34m", "The Games 'roulette', 'Dice Rolling Game' and 'Slots' to the 'games casino' command"},
-                        {"Added", "\033[1;34m", "A new 'bank' command"}
+                        {"Added", addedColor, "A new 'games' command that has different groups of games"},
+                        {"Added", addedColor, "The section 'casino' to the 'games' command"},
+                        {"Added", addedColor, "The Games 'roulette', 'Dice Rolling Game' and 'Slots' to the 'games casino' command"},
+                        {"Added", addedColor, "A new 'bank' command"}
                     }
                 },
                 {
                     "0.0.0.6.5",
                     {
-                        {"Reworked", "\033[1;30m", "The 'sys version history' command with fresh visuals and clear versions and subVersions"},
-                        {"Reworked", "\033[1;30m", "The Logic of the main function to be more modular and easy to modify"}
+                        {"Reworked", reworkColor, "The 'sys version history' command with fresh visuals and clear versions and subVersions"},
+                        {"Reworked", reworkColor, "The Logic of the main function to be more modular and easy to modify"}
                     }
                 },
                 {
                     "0.0.0.6.6",
                     {
-                        {"Added", "\033[1;34m", "The AsciiGraph Class to manage and render Graphes in pure Text"},
-                        {"Added", "\033[1;34m", "A new 'graph' command to test the AsciiGraph Class"},
-                        {"Added", "\033[1;34m", "The ProgressBar Class to add Progressbars with custom width"}
+                        {"Added", addedColor, "The AsciiGraph Class to manage and render Graphes in pure Text"},
+                        {"Added", addedColor, "A new 'graph' command to test the AsciiGraph Class"},
+                        {"Added", addedColor, "The ProgressBar Class to add Progressbars with custom width"},
+                        {"Reworked", reworkColor, "The Logic of the 'sys log' command to save the commands with timestamps in a vector"}
+                    }
+                }, 
+                {
+                    "0.0.0.6.7", 
+                    {
+                        {"Fixed", infoColor, "The Logic of the main function to be more modular and easy to modify"}
                     }
                 }
             }
@@ -4077,26 +4090,6 @@ class ProgressBar {
             std::cout << std::endl;
         }
 };
-
-
-
-
-void printProgressBar(int progress, int total, int barWidth) {
-    float percent = (float)progress / total;
-    int pos = barWidth * percent;
-
-    std::cout << "[";
-    for (int i = 0; i < barWidth; ++i) {
-        if (i < pos)
-            std::cout << "=";
-        else if (i == pos)
-            std::cout << ">";
-        else
-            std::cout << " ";
-    }
-    std::cout << "] " << int(percent * 100.0) << " %\r";
-    std::cout.flush();
-}
 
 
 
