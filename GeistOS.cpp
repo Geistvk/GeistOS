@@ -803,9 +803,14 @@ protected:
         std::string suffix = ""; 
     };
 
+    struct cmdEntry {
+        cmdHelp help;
+        std::string description;
+    };
+
     struct Category {
         std::string title;
-        std::vector<cmdHelp> lines;
+        std::vector<cmdEntry> lines;
         size_t width = 0;
     };
 
@@ -865,7 +870,8 @@ private:
                 {"mkdir", {"Folder Name"}},
                 {"rm", {"File Name", "Folder Name"}, true},
                 {"touch", {"File Name"}},
-                {"vim", {"File Name"}}
+                {"vim", {"File Name"}},
+                {"cat", {"File Name"}}
             }
         });
 
@@ -1081,7 +1087,9 @@ private:
                 {
                     "0.0.0.6.7", 
                     {
-                        {"Fixed", infoColor, "The Logic of the main function to be more modular and easy to modify"}
+                        {"Fixed", infoColor, "The Logic of the main function to be more modular and easy to modify"}, 
+                        {"Added", addedColor, "A new 'cat' command in Order to view the content of a file in the terminal"},
+                        {"Reworked", reworkColor, "The 'ls' command to be cleaner and have fresh colors"}
                     }
                 }
             }
@@ -1109,6 +1117,7 @@ class Help: public Config {
 private:
     int maxPerLine = 4;
     int maxListPerLine = 9;
+    const size_t HELP_COLUMN = 40;
 
     std::string standard   = getAnsiColor('8');
     std::string textColor1 = getAnsiColor('1');
@@ -1123,7 +1132,7 @@ private:
         std::cout << "\n" << standard << "==== " << catTitle << title << standard << " ====\n";
     }
 
-    void printStandardCmds(const std::vector<cmdHelp>& cmds) {
+    void printStandardCmds(const std::vector<cmdEntry>& cmds) {
         std::cout << textColor1 << "  ";
 
         for (size_t i = 0; i < cmds.size(); i++) {
@@ -1131,7 +1140,7 @@ private:
                 std::cout << "\n  ";
             }
 
-            std::cout << textColor1 << cmds[i].cmd;
+            std::cout << textColor1 << cmds[i].help.cmd;
 
             if (i < cmds.size() - 1 && ((i + 1) % maxPerLine) != 0) {
                 std::cout << standard << ", ";
@@ -1148,7 +1157,7 @@ private:
 
             if (catIndex > 0) {
                 for (const auto& cmd : category.lines) {
-                    printHelp(cmd.cmd, cmd.args, cmd.sudo, cmd.suffix);
+                    printHelp(cmd.help.cmd, cmd.help.args, cmd.help.sudo, cmd.help.suffix, false, "Test");
                 }
             } else {
                 printStandardCmds(category.lines);
@@ -1168,67 +1177,130 @@ public:
         const std::vector<std::string>& list,
         bool sudo = false,
         const std::string& suffix = "",
-        bool isUsage = false
+        bool isUsage = false,
+        std::string desc = ""
     ) {
-        if (!isUsage) std::cout << textColor1 << "  " << cmd;
-        else if (isUsage) std::cout << errorColor   << "Invalid Usage!\n" 
-                                    << errorColor   << "Usage" 
-                                    << standard     << ":" 
-                                    << textColor1   << " " 
-                                    << cmd;
+        size_t visibleLength = 0;
+
+        if (!isUsage) {
+            std::cout << textColor1 << "  " << cmd;
+            visibleLength = 2 + cmd.size();
+        } else {
+            std::cout << errorColor << "Invalid Usage!\n"
+                    << errorColor << "Usage"
+                    << standard   << ":"
+                    << textColor1 << " " << cmd;
+            visibleLength = 6 + cmd.size();
+        }
+
+        std::vector<std::string> remaining;
+        size_t i = 0;
 
         if (!list.empty()) {
             std::cout << standard << " <";
+            visibleLength += 2;
 
-            int totalListIndex = 0;
+            int listIndex = 0;
+            int totalCharLength = 0;
+
+            for (; i < list.size(); i++) {
+                size_t addLen = list[i].size();
+                if (i > 0) addLen += 1;
+
+                if ((listIndex >= maxListPerLine) ||
+                    ((totalCharLength + (int) addLen) >= ((maxListPerLine - 1) * 2))) {
+                    break;
+                }
+
+                if (i > 0) {
+                    std::cout << standard << "/";
+                    visibleLength += 1;
+                }
+
+                std::cout << textColor2 << list[i];
+                visibleLength += list[i].size();
+
+                totalCharLength += list[i].size();
+                listIndex++;
+            }
+
+            for (; i < list.size(); i++) {
+                remaining.push_back(list[i]);
+            }
+
+            bool isNotEndItem = (i + 1) < remaining.size();
+
+            if (isNotEndItem) std::cout << standard << "/";
+            else std::cout << standard << ">";
+            visibleLength += 1;
+        }
+
+        if (!desc.empty()) {
+            if (visibleLength < HELP_COLUMN) {
+                std::cout << std::string(HELP_COLUMN - visibleLength, ' ');
+            } else {
+                std::cout << " ";
+            }
+
+            std::cout << standard << desc;
+        }
+
+        std::cout << standard << "\n";
+
+        if (!remaining.empty()) {
             int listIndex = 0;
             int totalCharLength = 0;
 
             auto handleOverflow = [&]() {
-                size_t spacing = cmd.size();
+                size_t spacing = cmd.size() + 2;
                 if (isUsage) spacing += 5;
-                std::cout << standard << "\n   ";
-                for (size_t u = 0; u <= spacing; u++) {
-                    std::cout << standard << " ";
+
+                std::cout << standard << "\n  ";
+                for (size_t u = 0; u < spacing; u++) {
+                    std::cout << " ";
                 }
+
                 listIndex = 0;
                 totalCharLength = 0;
             };
 
-            for (size_t i = 0; i < list.size(); i++) {
-                boolean isNotEndItem = (totalListIndex + 1) < ((int) list.size());
-                totalCharLength += (int) list[i].size();
+            std::cout << standard << "  ";
+            for (size_t u = 0; u < (cmd.size() + 2); u++) {
+                std::cout << " ";
+            }
 
-                std::cout << textColor2 << list[i];
+            for (size_t j = 0; j < remaining.size(); j++) {
+                bool isNotEndItem = (j + 1) < remaining.size();
+                totalCharLength += remaining[j].size();
 
-                if (i < list.size() - 1) {
+                std::cout << textColor2 << remaining[j];
+
+                if (j < remaining.size() - 1) {
                     std::cout << standard << "/";
                 }
 
                 if (isNotEndItem &&
                     ((listIndex >= maxListPerLine) ||
-                    //(totalCharLength >= (maxListPerLine) * 2) ||
                     (totalCharLength >= ((maxListPerLine - 1) * 2)))
                 ) {
                     handleOverflow();
                 }
 
-                totalListIndex++;
                 listIndex++;
             }
 
-            std::cout << standard << ">";
-        }
-
-        if (suffix != "") {
-            std::cout << standard << " " << suffix;
+            std::cout << standard << ">\n";
         }
 
         if (sudo) {
             std::cout << standard << " (" << sudoColor << "sudo" << standard << " required)";
+            visibleLength += 16;
         }
 
-        std::cout << standard << "\n";
+        if (!suffix.empty()) {
+            std::cout << standard << " " << suffix;
+            visibleLength += 1 + suffix.size();
+        }
     }
 
     void render() {
@@ -1582,19 +1654,133 @@ void listDirectory(const std::string &path) {
     #endif
 }
 
+std::string formatSize(ULONGLONG size) {
+    const double KB = 1024.0;
+    const double MB = KB * 1024;
+    const double GB = MB * 1024;
+
+    std::ostringstream out;
+    out << std::fixed << std::setprecision(2);
+
+    if (size >= GB)
+        out << (size / GB) << " GB";
+    else if (size >= MB)
+        out << (size / MB) << " MB";
+    else if (size >= KB)
+        out << (size / KB) << " KB";
+    else
+        out << size << " B";
+
+    return out.str();
+}
+
+std::string getExtension(const std::string& filename) {
+    size_t pos = filename.find_last_of('.');
+    if (pos == std::string::npos || pos == filename.length() - 1)
+        return "FILE";
+
+    std::string ext = filename.substr(pos + 1);
+
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::toupper);
+
+    return ext;
+}
+
+void listDirectoryStyled(const std::string& path) {
+    const std::string RESET = "\033[0m";
+    const std::string BOLD = "\033[1m";
+    const std::string CYAN2 = "\033[36m";
+    const std::string GREEN = "\033[32m";
+    const std::string GRAY = "\033[90m";
+    WIN32_FIND_DATA findFileData;
+    HANDLE hFind;
+
+    std::string searchPath = path + "\\*";
+    hFind = FindFirstFile(searchPath.c_str(), &findFileData);
+
+    if (hFind == INVALID_HANDLE_VALUE) {
+        std::cout << "Error reading directory\n";
+        return;
+    }
+
+    int fileCount = 0;
+    int dirCount = 0;
+
+    std::cout << BOLD
+              << std::left << std::setw(10) << "TYPE"
+              << std::setw(30) << "NAME"
+              << std::setw(12) << "SIZE"
+              << RESET << "\n";
+
+    std::cout << "--------------------------------------------------------\n";
+
+    do {
+        std::string name = findFileData.cFileName;
+        if (name == "." || name == "..") continue;
+
+        bool isDir = findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+
+        std::cout << std::left;
+
+        if (isDir) {
+            std::cout << CYAN2
+                      << std::setw(10) << "[DIR]"
+                      << std::setw(30) << name
+                      << std::setw(12) << "-"
+                      << RESET << "\n";
+            dirCount++;
+        } else {
+            ULONGLONG size =
+                (static_cast<ULONGLONG>(findFileData.nFileSizeHigh) << 32) |
+                findFileData.nFileSizeLow;
+
+            std::string ext = getExtension(name);
+            std::string label = "[" + ext + "]";
+
+            std::cout << GREEN
+                      << std::setw(10) << label
+                      << std::setw(30) << name
+                      << std::setw(12) << formatSize(size)
+                      << RESET << "\n";
+
+            fileCount++;
+        }
+
+    } while (FindNextFile(hFind, &findFileData) != 0);
+
+    FindClose(hFind);
+
+    std::cout << "\n";
+    std::cout << GRAY << "Folders: " << dirCount
+              << " | Files: " << fileCount << RESET << "\n";
+}
+
 void cmd_ls(const std::vector<std::string>& args) {
+    const std::string RESET = "\033[0m";
+    const std::string BOLD = "\033[1m";
+    const std::string CYAN2 = "\033[36m";
+    const std::string GREEN = "\033[32m";
+    const std::string YELLOW = "\033[33m";
+    const std::string GRAY = "\033[90m";
+
     (void)args;
-    // aktuellen Arbeitsordner herausfinden (wo .exe liegt)
+
     char buffer[1024];
-
     GetModuleFileName(NULL, buffer, sizeof(buffer));
-    std::string exePfad(buffer);
-    exePfad = exePfad.substr(0, exePfad.find_last_of("\\/")); // nur Verzeichnis
 
-    std::string ordnerPfad = exePfad + "\\" + currentDictonary;
+    std::string exePath(buffer);
+    exePath = exePath.substr(0, exePath.find_last_of("\\/"));
 
-    std::cout << currentColor + "Content of the Folder: " << ordnerPfad << std::endl;
-    listDirectory(ordnerPfad);
+    std::string folderPath = exePath + "\\" + currentDictonary;
+
+    std::cout << "\n";
+    std::cout << BOLD << "=== DIRECTORY LIST ===" << RESET << "\n";
+    std::cout << GRAY << "Path: " << RESET << folderPath << "\n";
+    std::cout << "--------------------------------------------------------\n\n";
+
+    listDirectoryStyled(folderPath);
+
+    std::cout << "\n";
 }
 
 void cmd_rm(const std::vector<std::string>& args) {
@@ -4137,6 +4323,57 @@ void cmd_graph(const std::vector<std::string>& args, Terminal& term) {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+void cmd_cat(const std::vector<std::string>& args, Terminal& term) {
+    (void) term;
+    if (args.size() < 2) {
+        std::cerr << "cat: missing file operand\n";
+        return;
+    }
+
+    bool showNumbers = false;
+    int startIndex = 1;
+
+    if (std::string(args[1]) == "-n") {
+        showNumbers = true;
+        startIndex = 2;
+    }
+
+    for (size_t i = startIndex; i < args.size(); i++) {
+        std::ifstream file(args[i]);
+
+        if (!file.is_open()) {
+            std::cerr << "cat: cannot open " << args[i] << "\n";
+            continue;
+        }
+
+        std::string line;
+        int lineNumber = 1;
+
+        while (std::getline(file, line)) {
+            if (showNumbers) {
+                std::cout << lineNumber++ << "  ";
+            }
+            std::cout << line << std::endl;
+        }
+
+        file.close();
+    }
+
+}
+
+
+
 struct Permissions {
     bool read = false;
     bool write = false;
@@ -4350,6 +4587,13 @@ private:
             {"graph", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_graph(args, terminal);
+                return "";
+            }, 
+            {}},
+
+            {"cat", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_cat(args, terminal);
                 return "";
             }, 
             {}}
