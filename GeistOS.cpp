@@ -862,6 +862,10 @@ private:
                     "Ping any Ip Adress"
                 },
                 {
+                    {"db", {"create", "insert", "query", "list"}},
+                    "Create a local Database and manage it with the given Commands"
+                },
+                {
                     {"sys", {"info", "help", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "host", "config", "update", "clearcache", "bench"}}, 
                     "Manage this System"
                 }
@@ -4421,6 +4425,327 @@ void cmd_cat(const std::vector<std::string>& args, Terminal& term) {
 
 
 
+
+
+class MiniDB {
+private:
+    struct Table {
+        std::vector<std::string> columns;
+        std::vector<std::vector<std::string>> rows;
+    };
+
+    struct Database {
+        std::string name;
+        Table table;
+    };
+
+    std::vector<Database> db;
+
+    const char COL_RESET   = '7';
+    const char COL_ERROR   = 'C';
+    const char COL_SUCCESS = '2';
+    const char COL_WARN    = 'E';
+    const char COL_TITLE   = '9';
+    const char COL_NAME    = 'B';
+    const char COL_VALUE   = 'F';
+    const char COL_HEADER  = '6';
+
+    std::string trim(const std::string& str) {
+        size_t start = str.find_first_not_of(" \t\r\n");
+        size_t end = str.find_last_not_of(" \t\r\n");
+
+        if (start == std::string::npos) return "";
+        return str.substr(start, end - start + 1);
+    }
+
+    void printLine(int width) {
+        for (int i = 0; i < width; i++) std::cout << "-";
+        std::cout << "\n";
+    }
+
+    Database* findDB(const std::string& name) {
+        for (auto& d : db) {
+            if (d.name == name) {
+                return &d;
+            }
+        }
+        return nullptr;
+    }
+
+public:
+    void create(const std::string& name, const std::vector<std::string>& cols) {
+        if (findDB(name)) {
+            std::cout << getAnsiColor(COL_ERROR)
+                    << "Error: DB already exists -> "
+                    << getAnsiColor(COL_NAME) << name
+                    << getAnsiColor(COL_RESET) << "\n";
+            return;
+        }
+
+        if (cols.empty()) {
+            std::cout << getAnsiColor(COL_ERROR)
+                    << "Error: No columns provided\n"
+                    << getAnsiColor(COL_RESET);
+            return;
+        }
+
+        Database database;
+        database.name = name;
+        database.table.columns = cols;
+
+        db.push_back(database);
+
+        std::cout << getAnsiColor(COL_SUCCESS)
+                << "\n[+] Database created\n"
+                << getAnsiColor(COL_RESET);
+
+        std::cout << " Name: "
+                << getAnsiColor(COL_NAME) << name
+                << getAnsiColor(COL_RESET) << "\n";
+
+        std::cout << " Columns: ";
+
+        for (const auto& c : cols) {
+            std::cout << getAnsiColor(COL_HEADER)
+                    << c << " "
+                    << getAnsiColor(COL_RESET);
+        }
+
+        std::cout << "\n\n";
+    }
+
+    void insert(const std::string& name, const std::vector<std::string>& values) {
+        Database* database = findDB(name);
+
+        if (!database) {
+            std::cout << getAnsiColor(COL_ERROR)
+                    << "Error: DB not found -> "
+                    << getAnsiColor(COL_NAME) << name
+                    << getAnsiColor(COL_RESET) << "\n";
+            return;
+        }
+
+        auto& table = database->table;
+
+        if (values.size() != table.columns.size()) {
+            std::cout << getAnsiColor(COL_ERROR)
+                    << "Error: expected "
+                    << table.columns.size()
+                    << " values\n"
+                    << getAnsiColor(COL_RESET);
+            return;
+        }
+
+        table.rows.push_back(values);
+
+        std::cout << getAnsiColor(COL_SUCCESS)
+                << "[+] Row inserted into "
+                << getAnsiColor(COL_NAME) << name
+                << getAnsiColor(COL_RESET) << "\n";
+    }
+
+    void query(const std::string& name) {
+        Database* database = findDB(name);
+
+        if (!database) {
+            std::cout << getAnsiColor(COL_ERROR)
+                    << "Error: DB not found -> "
+                    << getAnsiColor(COL_NAME) << name
+                    << getAnsiColor(COL_RESET) << "\n";
+            return;
+        }
+
+        auto& table = database->table;
+
+        std::cout << getAnsiColor(COL_TITLE)
+                << "\n=== TABLE: "
+                << getAnsiColor(COL_NAME) << name
+                << getAnsiColor(COL_TITLE)
+                << " ===\n"
+                << getAnsiColor(COL_RESET);
+
+        if (table.columns.empty()) {
+            std::cout << getAnsiColor(COL_WARN)
+                    << "(no columns)\n"
+                    << getAnsiColor(COL_RESET);
+            return;
+        }
+
+        for (const auto& col : table.columns) {
+            std::cout << getAnsiColor(COL_HEADER)
+                    << col << "\t"
+                    << getAnsiColor(COL_RESET);
+        }
+
+        std::cout << "\n--------------------------------\n";
+
+        if (table.rows.empty()) {
+            std::cout << getAnsiColor(COL_WARN)
+                    << "(no data)\n"
+                    << getAnsiColor(COL_RESET);
+            return;
+        }
+
+        for (const auto& row : table.rows) {
+            for (const auto& val : row) {
+                std::cout << getAnsiColor(COL_VALUE)
+                        << val << "\t"
+                        << getAnsiColor(COL_RESET);
+            }
+            std::cout << "\n";
+        }
+
+        std::cout << "\n";
+    }
+
+    void list() {
+        std::cout << getAnsiColor(COL_TITLE)
+                << "\n=== DATABASES ===\n"
+                << getAnsiColor(COL_RESET);
+
+        if (db.empty()) {
+            std::cout << getAnsiColor(COL_WARN)
+                    << "(none)\n"
+                    << getAnsiColor(COL_RESET);
+            return;
+        }
+
+        for (const auto& d : db) {
+            std::cout << getAnsiColor(COL_NAME)
+                    << "- " << d.name
+                    << getAnsiColor(COL_RESET)
+                    << " | cols: " << d.table.columns.size()
+                    << " | rows: " << d.table.rows.size()
+                    << "\n";
+        }
+
+        std::cout << "\n";
+    }
+
+    void drop(const std::string& name) {
+        for (auto it = db.begin(); it != db.end(); ++it) {
+            if (it->name == name) {
+                db.erase(it);
+
+                std::cout << getAnsiColor(COL_SUCCESS)
+                        << "[+] Deleted DB: "
+                        << getAnsiColor(COL_NAME) << name
+                        << getAnsiColor(COL_RESET) << "\n";
+                return;
+            }
+        }
+
+        std::cout << getAnsiColor(COL_ERROR)
+                << "Error: DB not found\n"
+                << getAnsiColor(COL_RESET);
+    }
+
+    void clear(const std::string& name) {
+        Database* database = findDB(name);
+
+        if (!database) {
+            std::cout << getAnsiColor(COL_ERROR)
+                    << "Error: DB not found\n"
+                    << getAnsiColor(COL_RESET);
+            return;
+        }
+
+        database->table.rows.clear();
+
+        std::cout << getAnsiColor(COL_SUCCESS)
+                << "[+] Cleared DB: "
+                << getAnsiColor(COL_NAME) << name
+                << getAnsiColor(COL_RESET) << "\n";
+    }
+};
+
+
+
+
+
+
+MiniDB db;
+
+void cmd_db(const std::vector<std::string>& args, Terminal& term) {
+    (void) term;
+
+    if (args.size() < 2) {
+        help.printHelp("db", {"create", "insert", "query", "list", "drop", "clear"}, false, "", true);
+        return;
+    }
+
+    std::string sub = args[1];
+
+    if (sub == "create") {
+        if (args.size() < 4) {
+            help.printHelp("db create", {"name", "col1", "col2", "..."}, false, "", true);
+            return;
+        }
+
+        std::string name = args[2];
+
+        std::vector<std::string> columns;
+        for (size_t i = 3; i < args.size(); i++) {
+            columns.push_back(args[i]);
+        }
+
+        db.create(name, columns);
+    } else if (sub == "insert") {
+        if (args.size() < 4) {
+            help.printHelp("db insert", {"name", "value1", "value2", "..."}, false, "", true);
+            return;
+        }
+
+        std::string name = args[2];
+
+        std::vector<std::string> values;
+        for (size_t i = 3; i < args.size(); i++) {
+            values.push_back(args[i]);
+        }
+
+        db.insert(name, values);
+    } else if (sub == "query") {
+        if (args.size() < 3) {
+            help.printHelp("db query", {"name"}, false, "", true);
+            return;
+        }
+
+        db.query(args[2]);
+    } else if (sub == "list") {
+        db.list();
+    } else if (sub == "drop") {
+        if (args.size() < 3) {
+            help.printHelp("db drop", {"name"}, false, "", true);
+            return;
+        }
+
+        db.drop(args[2]);
+    } else if (sub == "clear") {
+        if (args.size() < 3) {
+            help.printHelp("db clear", {"name"}, false, "", true);
+            return;
+        }
+
+        db.clear(args[2]);
+    }
+
+    else {
+        help.printHelp("db", {"create", "insert", "query", "list", "drop", "clear"}, false, "", true);
+    }
+}  
+
+
+
+
+
+
+
+
+
+
+
+
+
 struct Permissions {
     bool read = false;
     bool write = false;
@@ -4641,6 +4966,13 @@ private:
             {"cat", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_cat(args, terminal);
+                return "";
+            }, 
+            {}},
+
+            {"db", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_db(args, terminal);
                 return "";
             }, 
             {}}
