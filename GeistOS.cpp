@@ -805,7 +805,7 @@ protected:
 
     struct cmdEntry {
         cmdHelp help;
-        std::string description;
+        std::string description = "";
     };
 
     struct Category {
@@ -857,53 +857,104 @@ private:
         categories.push_back({
             "Network & System",
             {
-                {"ping", {"ip"}},
-                {"sys", {"info", "help", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "host", "config", "update", "clearcache", "bench"}}
+                {
+                    {"ping", {"ip"}},
+                    "Ping any Ip Adress"
+                },
+                {
+                    {"sys", {"info", "help", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "host", "config", "update", "clearcache", "bench"}}, 
+                    "Manage this System"
+                }
             }
         });
 
         categories.push_back({
             "File System",
             {
-                {"dir /s"},
-                {"cd", {"Folder Path", "Folder Name"}},
-                {"mkdir", {"Folder Name"}},
-                {"rm", {"File Name", "Folder Name"}, true},
-                {"touch", {"File Name"}},
-                {"vim", {"File Name"}},
-                {"cat", {"File Name"}}
+                {
+                    {"dir /s"},
+                    "Show All Folders"
+                },
+                {
+                    {"cd", {"Folder Path", "Folder Name"}},
+                    "Change the Current Directory"
+                },
+                {
+                    {"mkdir", {"Folder Name"}},
+                    "Create a new Folder"
+                },
+                {
+                    {"rm", {"File Name", "Folder Name"}, true},
+                    "Delete a selected File/Folder"
+                },
+                {
+                    {"touch", {"File Name"}},
+                    "Create a new File"
+                },
+                {
+                    {"vim", {"File Name"}},
+                    "Edit the selected File"
+                },
+                {
+                    {"cat", {"File Name"}},
+                    "Show the content of the File"
+                }
             }
         });
 
         categories.push_back({
             "Users & Permissions",
             {
-                {"user", {"list", "add", "edit", "del", "help"}, true},
-                {"perm", {"list", "edit", "info", "help"}, true},
-                {"passwd", {}, true}
+                {
+                    {"user", {"list", "add", "edit", "del", "help"}, true}, 
+                    "Manage the Users of this System"
+                },
+                {
+                    {"perm", {"list", "edit", "info", "help"}, true}, 
+                    "Manage the Permissions of this System"
+                },
+                {
+                    {"passwd", {}, true}, 
+                    "Change the Password"
+                }
             }
         });
 
         categories.push_back({
             "System Tools",
             {
-                {"apt update/install", {"Package"}, true}
+                {
+                    {"apt update/install", {"Package"}, true}, 
+                    "Install/Update the selected Package"
+                }
             }
         });
 
         categories.push_back({
             "Entertaining",
             {
-                {"games", {"casino"}}, 
-                {"bank", {}}
+                {
+                    {"games", {"casino"}},
+                    "Play the Games from this Category" 
+                }, 
+                {
+                    {"bank", {}}, 
+                    "Manage your simulated Finances"
+                }
             }
         });
 
         categories.push_back({
             "UI & Output",
             {
-                {"print", {"text"}},
-                {"color", {"hex-codes"}, false, "(0-F, 7 default)"}
+                {
+                    {"print", {"text"}}, 
+                    "Print any Text in the Big Letters"
+                },
+                {
+                    {"color", {"hex-codes"}, false, "(0-F, 7 default)"}, 
+                    "Change the Color of the Text"
+                }
             }
         });
     }
@@ -1089,7 +1140,8 @@ private:
                     {
                         {"Fixed", infoColor, "The Logic of the main function to be more modular and easy to modify"}, 
                         {"Added", addedColor, "A new 'cat' command in Order to view the content of a file in the terminal"},
-                        {"Reworked", reworkColor, "The 'ls' command to be cleaner and have fresh colors"}
+                        {"Reworked", reworkColor, "The 'ls' command to be cleaner and have fresh colors"},
+                        {"Reworked", reworkColor, "The 'help' command to show a small Description for each command"}
                     }
                 }
             }
@@ -1116,8 +1168,8 @@ Config config;
 class Help: public Config {
 private:
     int maxPerLine = 4;
-    int maxListPerLine = 9;
-    const size_t HELP_COLUMN = 40;
+    int maxListPerLine = 15;
+    const size_t HELP_COLUMN = 50;
 
     std::string standard   = getAnsiColor('8');
     std::string textColor1 = getAnsiColor('1');
@@ -1157,7 +1209,7 @@ private:
 
             if (catIndex > 0) {
                 for (const auto& cmd : category.lines) {
-                    printHelp(cmd.help.cmd, cmd.help.args, cmd.help.sudo, cmd.help.suffix, false, "Test");
+                    printHelp(cmd.help.cmd, cmd.help.args, cmd.help.sudo, cmd.help.suffix, false, cmd.description);
                 }
             } else {
                 printStandardCmds(category.lines);
@@ -1182,6 +1234,7 @@ public:
     ) {
         size_t visibleLength = 0;
 
+        // --- HEADER ---
         if (!isUsage) {
             std::cout << textColor1 << "  " << cmd;
             visibleLength = 2 + cmd.size();
@@ -1193,48 +1246,76 @@ public:
             visibleLength = 6 + cmd.size();
         }
 
-        std::vector<std::string> remaining;
-        size_t i = 0;
+        // --- PARAMETER AUFTEILEN ---
+        std::vector<std::vector<std::string>> lines;
 
         if (!list.empty()) {
+            std::vector<std::string> current;
+            size_t len = 0;
+
+            for (size_t i = 0; i < list.size(); i++) {
+                size_t add = list[i].size();
+                size_t extra = current.empty() ? 0 : 1;
+
+                if (!current.empty() &&
+                    ((int)(current.size()) >= maxListPerLine ||
+                    (int)(len + add + extra) >= ((maxListPerLine - 1) * 2))) {
+
+                    lines.push_back(current);
+                    current.clear();
+                    len = 0;
+                }
+
+                current.push_back(list[i]);
+                len += add + extra;
+            }
+
+            if (!current.empty()) {
+                lines.push_back(current);
+            }
+        }
+
+        // --- ERSTE ZEILE PARAMETER ---
+        if (!lines.empty()) {
             std::cout << standard << " <";
             visibleLength += 2;
 
-            int listIndex = 0;
-            int totalCharLength = 0;
-
-            for (; i < list.size(); i++) {
-                size_t addLen = list[i].size();
-                if (i > 0) addLen += 1;
-
-                if ((listIndex >= maxListPerLine) ||
-                    ((totalCharLength + (int) addLen) >= ((maxListPerLine - 1) * 2))) {
-                    break;
-                }
-
+            for (size_t i = 0; i < lines[0].size(); i++) {
                 if (i > 0) {
                     std::cout << standard << "/";
-                    visibleLength += 1;
+                    visibleLength++;
                 }
 
-                std::cout << textColor2 << list[i];
-                visibleLength += list[i].size();
-
-                totalCharLength += list[i].size();
-                listIndex++;
+                std::cout << textColor2 << lines[0][i];
+                visibleLength += lines[0][i].size();
             }
 
-            for (; i < list.size(); i++) {
-                remaining.push_back(list[i]);
+            if (lines.size() > 1) {
+                std::cout << standard << "/";
+                visibleLength++;
+            } else {
+                std::cout << standard << ">";
+                visibleLength++;
             }
-
-            bool isNotEndItem = (i + 1) < remaining.size();
-
-            if (isNotEndItem) std::cout << standard << "/";
-            else std::cout << standard << ">";
-            visibleLength += 1;
         }
 
+        // --- SUDO DIREKT NACH ARGS ---
+        if (sudo) {
+            std::string sudoText = " ("; 
+            sudoText += "sudo";
+            sudoText += " required)";
+
+            std::cout << standard << " (" << sudoColor << "sudo" << standard << " required)";
+            visibleLength += sudoText.size();
+        }
+
+        // --- SUFFIX ---
+        if (!suffix.empty()) {
+            std::cout << standard << " " << suffix;
+            visibleLength += 1 + suffix.size();
+        }
+
+        // --- DESCRIPTION ---
         if (!desc.empty()) {
             if (visibleLength < HELP_COLUMN) {
                 std::cout << std::string(HELP_COLUMN - visibleLength, ' ');
@@ -1245,61 +1326,34 @@ public:
             std::cout << standard << desc;
         }
 
-        std::cout << standard << "\n";
+        std::cout << "\n";
 
-        if (!remaining.empty()) {
-            int listIndex = 0;
-            int totalCharLength = 0;
+        // --- OVERFLOW ZEILEN ---
+        if (lines.size() > 1) {
+            size_t indent = cmd.size() + 2;
 
-            auto handleOverflow = [&]() {
-                size_t spacing = cmd.size() + 2;
-                if (isUsage) spacing += 5;
-
-                std::cout << standard << "\n  ";
-                for (size_t u = 0; u < spacing; u++) {
+            for (size_t l = 1; l < lines.size(); l++) {
+                std::cout << "  ";
+                for (size_t i = 0; i < indent; i++) {
                     std::cout << " ";
                 }
 
-                listIndex = 0;
-                totalCharLength = 0;
-            };
+                for (size_t i = 0; i < lines[l].size(); i++) {
+                    if (i > 0) {
+                        std::cout << standard << "/";
+                    }
 
-            std::cout << standard << "  ";
-            for (size_t u = 0; u < (cmd.size() + 2); u++) {
-                std::cout << " ";
-            }
+                    std::cout << textColor2 << lines[l][i];
+                }
 
-            for (size_t j = 0; j < remaining.size(); j++) {
-                bool isNotEndItem = (j + 1) < remaining.size();
-                totalCharLength += remaining[j].size();
-
-                std::cout << textColor2 << remaining[j];
-
-                if (j < remaining.size() - 1) {
+                if (l < lines.size() - 1) {
                     std::cout << standard << "/";
+                } else {
+                    std::cout << standard << ">";
                 }
 
-                if (isNotEndItem &&
-                    ((listIndex >= maxListPerLine) ||
-                    (totalCharLength >= ((maxListPerLine - 1) * 2)))
-                ) {
-                    handleOverflow();
-                }
-
-                listIndex++;
+                std::cout << "\n";
             }
-
-            std::cout << standard << ">\n";
-        }
-
-        if (sudo) {
-            std::cout << standard << " (" << sudoColor << "sudo" << standard << " required)";
-            visibleLength += 16;
-        }
-
-        if (!suffix.empty()) {
-            std::cout << standard << " " << suffix;
-            visibleLength += 1 + suffix.size();
         }
     }
 
