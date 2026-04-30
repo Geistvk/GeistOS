@@ -1234,7 +1234,6 @@ public:
     ) {
         size_t visibleLength = 0;
 
-        // --- HEADER ---
         if (!isUsage) {
             std::cout << textColor1 << "  " << cmd;
             visibleLength = 2 + cmd.size();
@@ -1246,7 +1245,6 @@ public:
             visibleLength = 6 + cmd.size();
         }
 
-        // --- PARAMETER AUFTEILEN ---
         std::vector<std::vector<std::string>> lines;
 
         if (!list.empty()) {
@@ -1275,7 +1273,6 @@ public:
             }
         }
 
-        // --- ERSTE ZEILE PARAMETER ---
         if (!lines.empty()) {
             std::cout << standard << " <";
             visibleLength += 2;
@@ -1299,7 +1296,6 @@ public:
             }
         }
 
-        // --- SUDO DIREKT NACH ARGS ---
         if (sudo) {
             std::string sudoText = " ("; 
             sudoText += "sudo";
@@ -1309,13 +1305,11 @@ public:
             visibleLength += sudoText.size();
         }
 
-        // --- SUFFIX ---
         if (!suffix.empty()) {
             std::cout << standard << " " << suffix;
             visibleLength += 1 + suffix.size();
         }
 
-        // --- DESCRIPTION ---
         if (!desc.empty()) {
             if (visibleLength < HELP_COLUMN) {
                 std::cout << std::string(HELP_COLUMN - visibleLength, ' ');
@@ -1328,7 +1322,6 @@ public:
 
         std::cout << "\n";
 
-        // --- OVERFLOW ZEILEN ---
         if (lines.size() > 1) {
             size_t indent = cmd.size() + 2;
 
