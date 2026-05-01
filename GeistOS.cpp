@@ -368,6 +368,491 @@ void idleMonitor()
 
 auto systemStart = std::chrono::steady_clock::now();
 
+
+
+
+
+
+
+class DataBase {
+public:
+    struct Condition {
+        std::string column;
+        std::string op;
+        std::string value;
+    };
+private:
+    struct Table {
+        std::vector<std::string> columns;
+        std::vector<std::vector<std::string>> rows;
+    };
+
+    struct Database {
+        std::string name;
+        Table table;
+    };
+
+    std::vector<Database> db;
+
+    const char COL_RESET   = '7';
+    const char COL_ERROR   = 'C';
+    const char COL_SUCCESS = '2';
+    const char COL_WARN    = 'E';
+    const char COL_TITLE   = '9';
+    const char COL_NAME    = 'B';
+    const char COL_VALUE   = 'F';
+    const char COL_HEADER  = '6';
+
+    std::string trim(const std::string& str) {
+        size_t start = str.find_first_not_of(" \t\r\n");
+        size_t end = str.find_last_not_of(" \t\r\n");
+
+        if (start == std::string::npos) return "";
+        return str.substr(start, end - start + 1);
+    }
+
+    void printLine(int width) {
+        for (int i = 0; i < width; i++) std::cout << "-";
+        std::cout << "\n";
+    }
+
+    int getColumnIndex(const Table& table, const std::string& col) {
+        for (size_t i = 0; i < table.columns.size(); i++) {
+            if (table.columns[i] == col) return i;
+        }
+        return -1;
+    }
+
+    bool matchWhere(const std::vector<std::string>& row, int colIndex, const std::string& value) {
+        if (colIndex < 0 || colIndex >= (int)row.size()) return false;
+        return row[colIndex] == value;
+    }
+
+    bool compareValues(const std::string& a, const std::string& op, const std::string& b) {
+        // versuche int Vergleich
+        try {
+            int ai = std::stoi(a);
+            int bi = std::stoi(b);
+
+            if (op == "=")  return ai == bi;
+            if (op == "!=") return ai != bi;
+            if (op == ">")  return ai > bi;
+            if (op == "<")  return ai < bi;
+            if (op == ">=") return ai >= bi;
+            if (op == "<=") return ai <= bi;
+        } catch (...) {
+            // fallback string
+            if (op == "=")  return a == b;
+            if (op == "!=") return a != b;
+            if (op == ">")  return a > b;
+            if (op == "<")  return a < b;
+            if (op == ">=") return a >= b;
+            if (op == "<=") return a <= b;
+        }
+
+        return false;
+    }
+
+    bool validateConditions(
+        const Table& table,
+        const std::vector<Condition>& conditions
+    ) {
+        for (const auto& cond : conditions) {
+            int idx = getColumnIndex(table, cond.column);
+
+            if (idx == -1) {
+                std::cout << getAnsiColor(COL_ERROR)
+                        << "Error: Column not found -> "
+                        << getAnsiColor(COL_NAME) << cond.column
+                        << getAnsiColor(COL_RESET) << "\n";
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool matchCondition(
+        const Table& table,
+        const std::vector<std::string>& row,
+        const Condition& cond
+    ) {
+        int index = getColumnIndex(table, cond.column);
+        if (index == -1) return false;
+
+        return compareValues(row[index], cond.op, cond.value);
+    }
+
+    bool matchConditions(
+        const Table& table,
+        const std::vector<std::string>& row,
+        const std::vector<Condition>& conditions,
+        const std::vector<std::string>& logic // "and", "or"
+    ) {
+        if (conditions.empty()) return true;
+
+        bool result = matchCondition(table, row, conditions[0]);
+
+        for (size_t i = 1; i < conditions.size(); i++) {
+            bool current = matchCondition(table, row, conditions[i]);
+
+            if (logic[i - 1] == "and") {
+                result = result && current;
+            } else if (logic[i - 1] == "or") {
+                result = result || current;
+            }
+        }
+
+        return result;
+    }
+
+    Table filterTable(
+        const Table& table,
+        const std::vector<DataBase::Condition>& conditions,
+        const std::vector<std::string>& logic
+    ) {
+        Table result;
+        result.columns = table.columns;
+
+        for (const auto& row : table.rows) {
+            if (matchConditions(table, row, conditions, logic)) {
+                result.rows.push_back(row);
+            }
+        }
+
+        return result;
+    }
+
+    void printTable(const Table& table, const std::string& dbName) {
+        std::cout << getAnsiColor(COL_TITLE)
+                << "\n=== TABLE: "
+                << getAnsiColor(COL_NAME) << dbName
+                << getAnsiColor(COL_TITLE) << " ===\n"
+                << getAnsiColor(COL_RESET);
+
+        if (table.columns.empty()) {
+            std::cout << getAnsiColor(COL_WARN)
+                    << "(no columns)\n"
+                    << getAnsiColor(COL_RESET);
+            return;
+        }
+
+        std::vector<size_t> widths(table.columns.size());
+
+        for (size_t i = 0; i < table.columns.size(); i++) {
+            widths[i] = table.columns[i].size();
+        }
+
+        for (const auto& row : table.rows) {
+            for (size_t i = 0; i < row.size(); i++) {
+                widths[i] = std::max(widths[i], row[i].size());
+            }
+        }
+
+        auto printSeparator = [&]() {
+            std::cout << "+";
+            for (size_t i = 0; i < widths.size(); i++) {
+                std::cout << std::string(widths[i] + 2, '-') << "+";
+            }
+            std::cout << "\n";
+        };
+
+        printSeparator();
+
+        std::cout << "|";
+        for (size_t i = 0; i < table.columns.size(); i++) {
+            std::cout << " "
+                    << getAnsiColor(COL_HEADER)
+                    << table.columns[i]
+                    << getAnsiColor(COL_RESET)
+                    << std::string(widths[i] - table.columns[i].size(), ' ')
+                    << " |";
+        }
+        std::cout << "\n";
+
+        printSeparator();
+
+        if (table.rows.empty()) {
+            std::cout << "| "
+                    << getAnsiColor(COL_WARN)
+                    << "(no data)"
+                    << getAnsiColor(COL_RESET);
+
+            size_t totalWidth = 0;
+            for (auto w : widths) totalWidth += w + 3;
+            std::cout << std::string(totalWidth - 9, ' ') << "|\n";
+
+            printSeparator();
+            return;
+        }
+
+        for (const auto& row : table.rows) {
+            std::cout << "|";
+            for (size_t i = 0; i < row.size(); i++) {
+                std::cout << " "
+                        << getAnsiColor(COL_VALUE)
+                        << row[i]
+                        << getAnsiColor(COL_RESET)
+                        << std::string(widths[i] - row[i].size(), ' ')
+                        << " |";
+            }
+            std::cout << "\n";
+        }
+
+        printSeparator();
+        std::cout << "\n";
+    }
+
+    Database* findDB(const std::string& name) {
+        for (auto& d : db) {
+            if (d.name == name) {
+                return &d;
+            }
+        }
+        return nullptr;
+    }
+
+    bool confirmAction(std::string action, std::string name) {
+        std::string confirm;
+        std::cout << getAnsiColor(COL_WARN)
+                << "Are you sure you want to " << action << " Database: "
+                << getAnsiColor(COL_NAME)   << name
+                << getAnsiColor(COL_WARN)   << "? (yes/no)"
+                << getAnsiColor(COL_RESET)  << ": ";
+        std::cin >> confirm;
+
+        if (confirm != "yes") {
+            std::cout << getAnsiColor(COL_SUCCESS)
+                    << "[!] Operation cancelled\n"
+                    << getAnsiColor(COL_RESET);
+            return false;
+        }
+        return true;
+    }
+
+
+
+
+public:
+    Condition parseCondition(const std::string& input) {
+        std::vector<std::string> ops = {"<=", ">=", "!=", "=", "<", ">"};
+
+        for (const auto& op : ops) {
+            size_t pos = input.find(op);
+            if (pos != std::string::npos) {
+                return {
+                    input.substr(0, pos),
+                    op,
+                    input.substr(pos + op.size())
+                };
+            }
+        }
+
+        return {"", "", ""};
+    }
+
+    void create(const std::string& name, const std::vector<std::string>& cols) {
+        if (findDB(name)) {
+            std::cout << getAnsiColor(COL_ERROR)
+                    << "Error: DB already exists -> "
+                    << getAnsiColor(COL_NAME) << name
+                    << getAnsiColor(COL_RESET) << "\n";
+            return;
+        }
+
+        if (cols.empty()) {
+            std::cout << getAnsiColor(COL_ERROR)
+                    << "Error: No columns provided\n"
+                    << getAnsiColor(COL_RESET);
+            return;
+        }
+
+        Database database;
+        database.name = name;
+        database.table.columns = cols;
+
+        db.push_back(database);
+
+        std::cout << getAnsiColor(COL_SUCCESS)
+                << "\n[+] Database created\n"
+                << getAnsiColor(COL_RESET);
+
+        std::cout << " Name: "
+                << getAnsiColor(COL_NAME) << name
+                << getAnsiColor(COL_RESET) << "\n";
+
+        std::cout << " Columns: ";
+
+        for (const auto& c : cols) {
+            std::cout << getAnsiColor(COL_HEADER)
+                    << c << " "
+                    << getAnsiColor(COL_RESET);
+        }
+
+        std::cout << "\n\n";
+    }
+
+    void insert(const std::string& name, const std::vector<std::string>& values) {
+        Database* database = findDB(name);
+
+        if (!database) {
+            std::cout << getAnsiColor(COL_ERROR)
+                    << "Error: DB not found -> "
+                    << getAnsiColor(COL_NAME) << name
+                    << getAnsiColor(COL_RESET) << "\n";
+            return;
+        }
+
+        auto& table = database->table;
+
+        if (values.size() != table.columns.size()) {
+            std::cout << getAnsiColor(COL_ERROR)
+                    << "Error: expected "
+                    << table.columns.size()
+                    << " values\n"
+                    << getAnsiColor(COL_RESET);
+            return;
+        }
+
+        table.rows.push_back(values);
+
+        std::cout << getAnsiColor(COL_SUCCESS)
+                << "[+] Row inserted into "
+                << getAnsiColor(COL_NAME) << name
+                << getAnsiColor(COL_RESET) << "\n";
+    }
+
+    void queryAdvanced(
+        const std::string& name,
+        const std::vector<Condition>& conditions,
+        const std::vector<std::string>& logic,
+        const std::string& orderCol = ""
+    ) {
+        Database* database = findDB(name);
+
+        if (!database) {
+            std::cout << getAnsiColor(COL_ERROR) << "DB not found\n" << getAnsiColor(COL_RESET);
+            return;
+        }
+
+        auto& table = database->table;
+
+        if (!validateConditions(table, conditions)) {
+            return;
+        }
+
+        if (!orderCol.empty()) {
+            int idx = getColumnIndex(table, orderCol);
+
+            if (idx == -1) {
+                std::cout << getAnsiColor(COL_ERROR)
+                        << "Error: ORDER column not found -> "
+                        << getAnsiColor(COL_NAME) << orderCol
+                        << getAnsiColor(COL_RESET) << "\n";
+                return;
+            }
+        }
+
+        int orderIndex = -1;
+        if (!orderCol.empty()) {
+            orderIndex = getColumnIndex(table, orderCol);
+        }
+
+        std::vector<std::vector<std::string>> result;
+
+        for (const auto& row : table.rows) {
+            if (matchConditions(table, row, conditions, logic)) {
+                result.push_back(row);
+            }
+        }
+
+        if (orderIndex != -1) {
+            std::sort(result.begin(), result.end(),
+                [orderIndex](const auto& a, const auto& b) {
+                    return a[orderIndex] < b[orderIndex];
+                }
+            );
+        }
+
+        auto& tablePrint = database->table;
+
+        Table filtered = filterTable(tablePrint, conditions, logic);
+        printTable(filtered, database->name);
+    }
+
+    void list() {
+        std::cout << getAnsiColor(COL_TITLE)
+                << "\n=== DATABASES ===\n"
+                << getAnsiColor(COL_RESET);
+
+        if (db.empty()) {
+            std::cout << getAnsiColor(COL_WARN)
+                    << "(none)\n"
+                    << getAnsiColor(COL_RESET);
+            return;
+        }
+
+        for (const auto& d : db) {
+            std::cout << getAnsiColor(COL_NAME)
+                    << "- " << d.name
+                    << getAnsiColor(COL_RESET)
+                    << " | cols: " << d.table.columns.size()
+                    << " | rows: " << d.table.rows.size()
+                    << "\n";
+        }
+
+        std::cout << "\n";
+    }
+
+    void drop(const std::string& name) {
+        if (confirmAction("delete", name)) {
+            for (auto it = db.begin(); it != db.end(); ++it) {
+                if (it->name == name) {
+                    db.erase(it);
+
+                    std::cout << getAnsiColor(COL_SUCCESS)
+                            << "[+] Deleted Database: "
+                            << getAnsiColor(COL_NAME) << name
+                            << getAnsiColor(COL_RESET) << "\n";
+                    return;
+                }
+            }
+
+            std::cout << getAnsiColor(COL_ERROR)
+                    << "Error: Database not found\n"
+                    << getAnsiColor(COL_RESET);
+        }
+    }
+
+    void clear(const std::string& name) {
+        if (confirmAction("clear", name)) {
+            Database* database = findDB(name);
+
+            if (!database) {
+                std::cout << getAnsiColor(COL_ERROR)
+                        << "Error: Database not found\n"
+                        << getAnsiColor(COL_RESET);
+                return;
+            }
+
+            database->table.rows.clear();
+
+            std::cout << getAnsiColor(COL_SUCCESS)
+                    << "[+] Cleared Database: "
+                    << getAnsiColor(COL_NAME) << name
+                    << getAnsiColor(COL_RESET) << "\n";
+        }
+    }
+};
+
+DataBase db;
+
+
+
+
+
+
+
+
 // ==========================
 // Terminal-Klasse 
 // ==========================
@@ -405,6 +890,14 @@ private:
     std::string sudoColor  = getAnsiColor('B');
 public:
     Terminal() {
+        db.create("users", {"userId", "preName", "lastName", "name", "password", "created", "rank", "userRights"});
+
+        db.insert("users", {"0", "Root", "Root", "root", "root123", "2024", "Owner", "1111"});
+        db.insert("users", {"1", "User", "User", "user", "user123", "2024", "Member", "1010"});
+        db.insert("users", {"2", "Bot", "Bot", "Bot", "bot123", "2024", "Bot", "0010"});
+        db.insert("users", {"3", "Admin", "Admin", "Admin", "admin123", "2024", "Admin", "1111"});
+        db.insert("users", {"4", "Jonas", "Broschinski", "Jonas", "12345", "2024", "Admin", "1111"});
+
         users["root"] = {0, "Root", "Root", "root", "root123", "2024", "Owner", "1111"};
         users["user"] = {1, "User", "User", "user", "user123", "2024", "Member", "1010"};
         users["Bot"] = {2, "Bot", "Bot", "Bot", "bot123", "2024", "Bot", "0010"};
@@ -862,7 +1355,7 @@ private:
                     "Ping any Ip Adress"
                 },
                 {
-                    {"db", {"create", "insert", "query", "list"}},
+                    {"db", {"create", "insert", "query", "list", "drop", "clear"}},
                     "Create a local Database and manage it with the given Commands"
                 },
                 {
@@ -1145,7 +1638,8 @@ private:
                         {"Fixed", infoColor, "The Logic of the main function to be more modular and easy to modify"}, 
                         {"Added", addedColor, "A new 'cat' command in Order to view the content of a file in the terminal"},
                         {"Reworked", reworkColor, "The 'ls' command to be cleaner and have fresh colors"},
-                        {"Reworked", reworkColor, "The 'help' command to show a small Description for each command"}
+                        {"Reworked", reworkColor, "The 'help' command to show a small Description for each command"},
+                        {"Added", addedColor, "The 'db' command to manage a local simulated Database"}
                     }
                 }
             }
@@ -1327,7 +1821,9 @@ public:
         std::cout << "\n";
 
         if (lines.size() > 1) {
-            size_t indent = cmd.size() + 2;
+            size_t indent;
+            if (!isUsage) indent = cmd.size() + 2;
+            else indent = cmd.size() + 7; 
 
             for (size_t l = 1; l < lines.size(); l++) {
                 std::cout << "  ";
@@ -4427,244 +4923,15 @@ void cmd_cat(const std::vector<std::string>& args, Terminal& term) {
 
 
 
-class MiniDB {
-private:
-    struct Table {
-        std::vector<std::string> columns;
-        std::vector<std::vector<std::string>> rows;
-    };
-
-    struct Database {
-        std::string name;
-        Table table;
-    };
-
-    std::vector<Database> db;
-
-    const char COL_RESET   = '7';
-    const char COL_ERROR   = 'C';
-    const char COL_SUCCESS = '2';
-    const char COL_WARN    = 'E';
-    const char COL_TITLE   = '9';
-    const char COL_NAME    = 'B';
-    const char COL_VALUE   = 'F';
-    const char COL_HEADER  = '6';
-
-    std::string trim(const std::string& str) {
-        size_t start = str.find_first_not_of(" \t\r\n");
-        size_t end = str.find_last_not_of(" \t\r\n");
-
-        if (start == std::string::npos) return "";
-        return str.substr(start, end - start + 1);
-    }
-
-    void printLine(int width) {
-        for (int i = 0; i < width; i++) std::cout << "-";
-        std::cout << "\n";
-    }
-
-    Database* findDB(const std::string& name) {
-        for (auto& d : db) {
-            if (d.name == name) {
-                return &d;
-            }
-        }
-        return nullptr;
-    }
-
-public:
-    void create(const std::string& name, const std::vector<std::string>& cols) {
-        if (findDB(name)) {
-            std::cout << getAnsiColor(COL_ERROR)
-                    << "Error: DB already exists -> "
-                    << getAnsiColor(COL_NAME) << name
-                    << getAnsiColor(COL_RESET) << "\n";
-            return;
-        }
-
-        if (cols.empty()) {
-            std::cout << getAnsiColor(COL_ERROR)
-                    << "Error: No columns provided\n"
-                    << getAnsiColor(COL_RESET);
-            return;
-        }
-
-        Database database;
-        database.name = name;
-        database.table.columns = cols;
-
-        db.push_back(database);
-
-        std::cout << getAnsiColor(COL_SUCCESS)
-                << "\n[+] Database created\n"
-                << getAnsiColor(COL_RESET);
-
-        std::cout << " Name: "
-                << getAnsiColor(COL_NAME) << name
-                << getAnsiColor(COL_RESET) << "\n";
-
-        std::cout << " Columns: ";
-
-        for (const auto& c : cols) {
-            std::cout << getAnsiColor(COL_HEADER)
-                    << c << " "
-                    << getAnsiColor(COL_RESET);
-        }
-
-        std::cout << "\n\n";
-    }
-
-    void insert(const std::string& name, const std::vector<std::string>& values) {
-        Database* database = findDB(name);
-
-        if (!database) {
-            std::cout << getAnsiColor(COL_ERROR)
-                    << "Error: DB not found -> "
-                    << getAnsiColor(COL_NAME) << name
-                    << getAnsiColor(COL_RESET) << "\n";
-            return;
-        }
-
-        auto& table = database->table;
-
-        if (values.size() != table.columns.size()) {
-            std::cout << getAnsiColor(COL_ERROR)
-                    << "Error: expected "
-                    << table.columns.size()
-                    << " values\n"
-                    << getAnsiColor(COL_RESET);
-            return;
-        }
-
-        table.rows.push_back(values);
-
-        std::cout << getAnsiColor(COL_SUCCESS)
-                << "[+] Row inserted into "
-                << getAnsiColor(COL_NAME) << name
-                << getAnsiColor(COL_RESET) << "\n";
-    }
-
-    void query(const std::string& name) {
-        Database* database = findDB(name);
-
-        if (!database) {
-            std::cout << getAnsiColor(COL_ERROR)
-                    << "Error: DB not found -> "
-                    << getAnsiColor(COL_NAME) << name
-                    << getAnsiColor(COL_RESET) << "\n";
-            return;
-        }
-
-        auto& table = database->table;
-
-        std::cout << getAnsiColor(COL_TITLE)
-                << "\n=== TABLE: "
-                << getAnsiColor(COL_NAME) << name
-                << getAnsiColor(COL_TITLE)
-                << " ===\n"
-                << getAnsiColor(COL_RESET);
-
-        if (table.columns.empty()) {
-            std::cout << getAnsiColor(COL_WARN)
-                    << "(no columns)\n"
-                    << getAnsiColor(COL_RESET);
-            return;
-        }
-
-        for (const auto& col : table.columns) {
-            std::cout << getAnsiColor(COL_HEADER)
-                    << col << "\t"
-                    << getAnsiColor(COL_RESET);
-        }
-
-        std::cout << "\n--------------------------------\n";
-
-        if (table.rows.empty()) {
-            std::cout << getAnsiColor(COL_WARN)
-                    << "(no data)\n"
-                    << getAnsiColor(COL_RESET);
-            return;
-        }
-
-        for (const auto& row : table.rows) {
-            for (const auto& val : row) {
-                std::cout << getAnsiColor(COL_VALUE)
-                        << val << "\t"
-                        << getAnsiColor(COL_RESET);
-            }
-            std::cout << "\n";
-        }
-
-        std::cout << "\n";
-    }
-
-    void list() {
-        std::cout << getAnsiColor(COL_TITLE)
-                << "\n=== DATABASES ===\n"
-                << getAnsiColor(COL_RESET);
-
-        if (db.empty()) {
-            std::cout << getAnsiColor(COL_WARN)
-                    << "(none)\n"
-                    << getAnsiColor(COL_RESET);
-            return;
-        }
-
-        for (const auto& d : db) {
-            std::cout << getAnsiColor(COL_NAME)
-                    << "- " << d.name
-                    << getAnsiColor(COL_RESET)
-                    << " | cols: " << d.table.columns.size()
-                    << " | rows: " << d.table.rows.size()
-                    << "\n";
-        }
-
-        std::cout << "\n";
-    }
-
-    void drop(const std::string& name) {
-        for (auto it = db.begin(); it != db.end(); ++it) {
-            if (it->name == name) {
-                db.erase(it);
-
-                std::cout << getAnsiColor(COL_SUCCESS)
-                        << "[+] Deleted DB: "
-                        << getAnsiColor(COL_NAME) << name
-                        << getAnsiColor(COL_RESET) << "\n";
-                return;
-            }
-        }
-
-        std::cout << getAnsiColor(COL_ERROR)
-                << "Error: DB not found\n"
-                << getAnsiColor(COL_RESET);
-    }
-
-    void clear(const std::string& name) {
-        Database* database = findDB(name);
-
-        if (!database) {
-            std::cout << getAnsiColor(COL_ERROR)
-                    << "Error: DB not found\n"
-                    << getAnsiColor(COL_RESET);
-            return;
-        }
-
-        database->table.rows.clear();
-
-        std::cout << getAnsiColor(COL_SUCCESS)
-                << "[+] Cleared DB: "
-                << getAnsiColor(COL_NAME) << name
-                << getAnsiColor(COL_RESET) << "\n";
-    }
-};
 
 
 
 
 
 
-MiniDB db;
+
+
+
 
 void cmd_db(const std::vector<std::string>& args, Terminal& term) {
     (void) term;
@@ -4705,12 +4972,38 @@ void cmd_db(const std::vector<std::string>& args, Terminal& term) {
 
         db.insert(name, values);
     } else if (sub == "query") {
-        if (args.size() < 3) {
-            help.printHelp("db query", {"name"}, false, "", true);
-            return;
+        std::string name = args[2];
+
+        std::vector<DataBase::Condition> conditions;
+        std::vector<std::string> logic;
+        std::string orderCol;
+
+        for (size_t i = 3; i < args.size(); i++) {
+
+            if (args[i] == "where") {
+                i++;
+                while (i < args.size()) {
+
+                    if (args[i] == "orderby") break;
+
+                    if (args[i] == "and" || args[i] == "or") {
+                        logic.push_back(args[i]);
+                    } else {
+                        conditions.push_back(db.parseCondition(args[i]));
+                    }
+
+                    i++;
+                }
+                i--;
+            }
+
+            else if (args[i] == "orderby" && i + 1 < args.size()) {
+                orderCol = args[i + 1];
+                i++;
+            }
         }
 
-        db.query(args[2]);
+        db.queryAdvanced(name, conditions, logic, orderCol);
     } else if (sub == "list") {
         db.list();
     } else if (sub == "drop") {
