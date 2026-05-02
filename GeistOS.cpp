@@ -1327,6 +1327,25 @@ protected:
         std::vector<SubVersions> subVersions;
     };
 
+
+
+    
+
+    struct Option {
+        std::string flag;
+        std::string description;
+    };
+
+    struct ManPage {
+        std::string name;
+        std::string description;
+        std::string usage;
+        std::vector<Option> options;
+        std::vector<std::string> examples;
+    };
+
+
+
     std::string standard        = "\033[0m";
     std::string addedColor      = getAnsiColor('1');
     std::string reworkColor     = getAnsiColor('8');
@@ -1336,6 +1355,7 @@ protected:
 private: 
     std::vector<Category> categories;
     std::vector<versionHistory> allVersions;
+    std::vector<ManPage> manPage;
 
     void initHelpCategories() {
         categories.clear();
@@ -1361,6 +1381,10 @@ private:
                 {
                     {"sys", {"info", "help", "uptime", "time", "tasks", "run", "kill", "mem", "cpu", "host", "config", "update", "clearcache", "bench"}}, 
                     "Manage this System"
+                }, 
+                {
+                    {"man", {"command"}},
+                    "View the Manual of each Command"
                 }
             }
         });
@@ -1459,21 +1483,384 @@ private:
 
 
 
+    void initManPages() {
+        manPage.clear();
+
+        manPage.push_back({
+            "help",
+            "Display help information",
+            "help",
+            {},
+            {
+                "help"
+            }
+        });
+
+        manPage.push_back({
+            "clear",
+            "Clear the terminal screen",
+            "clear",
+            {},
+            {
+                "clear"
+            }
+        });
+
+        manPage.push_back({
+            "echo",
+            "Display a line of text",
+            "echo <text>",
+            {
+                {"<text>", "The text you want to display"}
+            },
+            {
+                "echo Hello, World!",
+                "echo 'Hello World'"
+            }
+        });
+
+        manPage.push_back({
+            "ls",
+            "List directory contents",
+            "ls [options]",
+            {
+                {"-l", "Long format"},
+                {"-a", "Show hidden files"}
+            },
+            {
+                "ls",
+                "ls -la"
+            }
+        });
+
+        manPage.push_back({
+            "exit",
+            "Leave the Terminal",
+            "exit",
+            {},
+            {
+                "exit"
+            }
+        });
+
+        manPage.push_back({
+            "logout",
+            "Logout the current user",
+            "logout",
+            {},
+            {
+                "logout"
+            }
+        });
+
+        manPage.push_back({
+            "date",
+            "Show the current date and time",
+            "date",
+            {},
+            {
+                "date"
+            }
+        });
+
+        manPage.push_back({
+            "ping",
+            "Ping any Ip Adress",
+            "ping <ip>",
+            {
+                {"<ip>", "The IP address to ping"}
+            },
+            {
+                "ping 192.168.1.1"
+            }
+        });
+
+        manPage.push_back({
+            "db",
+            "Create a local Database and manage it with the given Commands",
+            "db <create/insert/query/list/drop/clear>",
+            {
+                {"create", "Create a new table"},
+                {"insert", "Insert data into a table"},
+                {"query", "Query data from a table"},
+                {"list", "List all tables"},
+                {"drop", "Drop a table"},
+                {"clear", "Clear all data from a table"}
+            },
+            {
+                "db create <tablename>",
+                "db insert <tablename> <data>",
+                "db query <tablename> <condition>",
+                "db list",
+                "db drop <tablename>",
+                "db clear <tablename>"
+            }
+        });
+
+        manPage.push_back({
+            "sys",
+            "Manage this System",
+            "sys <info/help/uptime/time/tasks/run/kill/mem/cpu/host/config/update/clearcache/bench>",
+            {
+                {"info", "Show system information"},
+                {"help", "Show the help message"},
+                {"uptime", "Show how long the system is running"},
+                {"time", "Show the current system time"},
+                {"tasks", "Show all running tasks"},
+                {"run", "Run a new task"},
+                {"kill", "Kill a running task"},
+                {"mem", "Show memory usage"},
+                {"cpu", "Show CPU usage"},
+                {"host", "Show host information"},
+                {"config", "Show system configuration"},
+                {"update", "Update the system (simulated)"},
+                {"clearcache", "Clear the system cache (simulated)"},
+                {"bench", "Run a benchmark test (simulated)"}
+            },
+            {
+                "sys info",
+                "sys help",
+                "sys uptime",
+                "sys time",
+                "sys tasks",
+                "sys run <taskname>",
+                "sys kill <pid>",
+                "sys mem",
+                "sys cpu",
+                "sys host",
+                "sys config",
+                "sys update",
+                "sys clearcache",
+                "sys bench"
+            }
+        });
+
+        manPage.push_back({
+            "man",
+            "Show manual pages",
+            "man <command>",
+            {
+                {"<command>", "The command for which to display help"}
+            },
+            {
+                "man ls",
+                "man echo",
+                "man"
+            }
+        });
+
+        manPage.push_back({
+            "dir /s",
+            "Show all folders",
+            "dir /s",
+            {},
+            {
+                "dir /s"
+            }
+        });
+
+        manPage.push_back({
+            "cd",
+            "Change directory",
+            "cd <Folderpath/Foldername>",
+            {
+                {"<Folderpath>", "The path of the folder you want to enter (e.g. /home/user/documents)"},
+                {"<Foldername>", "The name of the folder you want to enter (e.g. documents)"}
+            },
+            {
+                "cd /home",
+                "cd myFolder"
+            }
+        });
+
+        manPage.push_back({
+            "mkdir",
+            "Create a new folder",
+            "mkdir <foldername>",
+            {
+                {"<foldername>", "The name of the folder you want to create"}
+            },
+            {
+                "mkdir myFolder"
+            }
+        });
+
+        manPage.push_back({
+            "rm",
+            "Remove file or directory",
+            "rm <filename/foldername>",
+            {
+                {"<filename>", "The name of the file you want to remove"},
+                {"<foldername>", "The name of the folder you want to remove"}
+            },
+            {
+                "rm file.txt",
+                "rm myFolder"
+            }
+        });
+
+        manPage.push_back({
+            "touch",
+            "Create a new file",
+            "touch <file>",
+            {
+                {"<file>", "The name of the file you want to create"}
+            },
+            {
+                "touch file.txt"
+            }
+        });
+
+        manPage.push_back({
+            "vim",
+            "Edit file contents",
+            "vim <file>",
+            {
+                {"<file>", "The name of the file you want to edit"}
+            },
+            {
+                "vim file.txt"
+            }
+        });
+
+        manPage.push_back({
+            "cat",
+            "View file contents",
+            "cat <file>",
+            {
+                {"<file>", "The name of the file you want to view"}
+            },
+            {
+                "cat file.txt"
+            }
+        });
+
+        manPage.push_back({
+            "user",
+            "Manage users of this System",
+            "user <list/add/edit/del/help>",
+            {
+                {"list", "List all users"},
+                {"add", "Add a new user"},
+                {"edit", "Edit a user"},
+                {"del", "Delete a user"},
+                {"help", "Show this help message"}
+            },
+            {
+                "user list",
+                "user add",
+                "user edit",
+                "user del",
+                "user help"
+            }
+        });
+
+        manPage.push_back({
+            "perm",
+            "Manage permissions of this System",
+            "perm <list/edit/info/help>",
+            {
+                {"list", "List all permissions"},
+                {"edit", "Edit a permission"},
+                {"info", "Show info about all permissions"},
+                {"help", "Show this help message"}
+            },
+            {
+                "perm list",
+                "perm edit",
+                "perm info",
+                "perm help"
+            }
+        });
+
+        manPage.push_back({
+            "passwd",
+            "Change password",
+            "passwd",
+            {},
+            {
+                "passwd"
+            }
+        });
+
+        manPage.push_back({
+            "apt update/install",
+            "Install/Update Packages",
+            "apt update/install <package>",
+            {
+                {"<package>", "The name of the package you want to install/update"}
+            },
+            {
+                "apt update",
+                "apt install <package>"
+            }
+        });
+
+        manPage.push_back({
+            "games",
+            "Play the Games from this Category",
+            "games <section>",
+            {
+                {"<section>", "The Section of the Games you want to play (e.g. casino)"}
+            },
+            {
+                "games casino"
+            }
+        });
+
+        manPage.push_back({
+            "bank",
+            "Manage your simulated Finances",
+            "bank",
+            {},
+            {
+                "bank"
+            }
+        });
+
+        manPage.push_back({
+            "print",
+            "Print any Text in the Big Letters",
+            "print <text>",
+            {
+                {"<text>", "The Text you want to print"}
+            },
+            {
+                "print 'Hello, World!'"
+            }
+        });
+
+        manPage.push_back({
+            "color",
+            "Change the Color of the Text",
+            "color <hex-code>",
+            {
+                {"<hex-code>", "Hexadecimal color code"}
+            },
+            {
+                "color 1"
+            }
+        });
+    }
+
+
+
+
 
     void initVersions() {
         allVersions.clear();
 
         allVersions.push_back({
-            "0.0.0.1",
+            "0.1",
             {
                 {
-                    "0.0.0.1.1",
+                    "0.1.1",
                     {
                         {"Added", addedColor, "Dynamic C++ Code for an Linux like OS"}
                     }
                 },
                 {
-                    "0.0.0.1.2",
+                    "0.1.2",
                     {
                         {"Added", addedColor, "help\033[0m, \033[1;34mclear\033[0m, \033[1;34mecho\033[0m, \033[1;34mls\033[0m, \033[1;34mexit"},
                         {"Added", addedColor, "ping <ip>"}
@@ -1483,17 +1870,17 @@ private:
         });
 
         allVersions.push_back({
-            "0.0.0.2",
+            "0.2",
             {
                 {
-                    "0.0.0.2.1",
+                    "0.2.1",
                     {
                         {"Added", addedColor, "dir /s"},
                         {"Added", addedColor, "apt update/install <Package>\033[0m (\033[1;36msudo\033[0m required)"}
                     }
                 },
                 {
-                    "0.0.0.2.2",
+                    "0.2.2",
                     {
                         {"Added", addedColor, "cd <Folder Path or Folder Name>"},
                         {"Added", addedColor, "mkdir <Folder Name>"}, 
@@ -1501,7 +1888,7 @@ private:
                     }
                 },
                 {
-                    "0.0.0.2.3",
+                    "0.2.3",
                     {
                         {"Added", addedColor, "touch <File Name>"},
                         {"Added", addedColor, "vim <File Name>"}
@@ -1511,16 +1898,16 @@ private:
         });
 
         allVersions.push_back({
-            "0.0.0.3",
+            "0.3",
             {
                 {
-                    "0.0.0.3.1", 
+                    "0.3.1", 
                     {
                         {"Added", addedColor, "color <hex-code>\033[0m (0-F) {7 = default}"}
                     }
                 },
                 {
-                    "0.0.0.3.2",
+                    "0.3.2",
                     {
                         {"Added", addedColor, "addUser <Username>"},
                         {"Added", addedColor, "listUser <Username>"},
@@ -1532,17 +1919,17 @@ private:
         });
 
         allVersions.push_back({
-            "0.0.0.4",
+            "0.4",
             {
                 {
-                    "0.0.0.4.1", 
+                    "0.4.1", 
                     {
                         {"Reworked", reworkColor, "user <list/add/edit/del/help>\033[0m (\033[1;36msudo\033[0m required)"},
                         {"Reworked", reworkColor, "perm <list/edit/info/help>\033[0m (\033[1;36msudo\033[0m required)"}
                     }
                 },
                 {
-                    "0.0.0.4.2",
+                    "0.4.2",
                     {
                         {"Added", addedColor, "Spinning Ghost Idle Animation"},
                         {"Added", addedColor, "Early Versions of GeistOS GUI"},
@@ -1550,7 +1937,7 @@ private:
                     }
                 },
                 {
-                    "0.0.0.4.3",
+                    "0.4.3",
                     {
                         {"Added", addedColor, "Letter Library for print Cmd"},
                         {"Added", addedColor, "print <word to print>"}
@@ -1560,17 +1947,17 @@ private:
         });
 
         allVersions.push_back({
-            "0.0.0.5",
+            "0.5",
             {
                 {
-                    "0.0.0.5.1",
+                    "0.5.1",
                     {
                         {"Reworked", reworkColor, "Spinning Ghost Idle Animation"}, 
                         {"Disabled", disabledColor, "Spinning 3D Ghost Idle Animation"}
                     }
                 },
                 {
-                    "0.0.0.5.2",
+                    "0.5.2",
                     {
                         {"Added", addedColor, "sys version <history/cur>"},
                         {"Added", addedColor, "sys log <show/clear>"}
@@ -1580,10 +1967,10 @@ private:
         });
 
         allVersions.push_back({
-            "0.0.0.6",
+            "0.6",
             {
                 {
-                    "0.0.0.6.1",
+                    "0.6.1",
                     {
                         {"Reworked", reworkColor, "User Rank System"},
                         {"Reworked", reworkColor, "User Settings Menu"},
@@ -1593,7 +1980,7 @@ private:
                     }
                 },
                 {
-                    "0.0.0.6.2",
+                    "0.6.2",
                     {
                         {"Reworked", reworkColor, "The Help Screen with fresh colors and new Backend"},
                         {"Added", addedColor, "The Date Command with a beautiful Table View"},
@@ -1601,14 +1988,14 @@ private:
                     }
                 },
                 {
-                    "0.0.0.6.3",
+                    "0.6.3",
                     {
                         {"Reworked", reworkColor, "The Logic of the 'help' and the 'sys versions' command to be more modular"},
                         {"Added", addedColor, "A central Config class that the 'help' and 'sys version' command get the data from"}
                     }
                 },
                 {
-                    "0.0.0.6.4",
+                    "0.6.4",
                     {
                         {"Added", addedColor, "A new 'games' command that has different groups of games"},
                         {"Added", addedColor, "The section 'casino' to the 'games' command"},
@@ -1617,14 +2004,14 @@ private:
                     }
                 },
                 {
-                    "0.0.0.6.5",
+                    "0.6.5",
                     {
                         {"Reworked", reworkColor, "The 'sys version history' command with fresh visuals and clear versions and subVersions"},
                         {"Reworked", reworkColor, "The Logic of the main function to be more modular and easy to modify"}
                     }
                 },
                 {
-                    "0.0.0.6.6",
+                    "0.6.6",
                     {
                         {"Added", addedColor, "The AsciiGraph Class to manage and render Graphes in pure Text"},
                         {"Added", addedColor, "A new 'graph' command to test the AsciiGraph Class"},
@@ -1633,13 +2020,15 @@ private:
                     }
                 }, 
                 {
-                    "0.0.0.6.7", 
+                    "0.6.7", 
                     {
                         {"Fixed", infoColor, "The Logic of the main function to be more modular and easy to modify"}, 
                         {"Added", addedColor, "A new 'cat' command in Order to view the content of a file in the terminal"},
                         {"Reworked", reworkColor, "The 'ls' command to be cleaner and have fresh colors"},
                         {"Reworked", reworkColor, "The 'help' command to show a small Description for each command"},
-                        {"Added", addedColor, "The 'db' command to manage a local simulated Database"}
+                        {"Added", addedColor, "The 'db' command to manage a local simulated Database"},
+                        {"Reworked", reworkColor, "The Version numbering system from 0.0.0.1 to 0.1"},
+                        {"Added", addedColor, "The 'man' command to see how to use each command with examples and options"}
                     }
                 }
             }
@@ -1650,6 +2039,7 @@ public:
     Config() {
         initHelpCategories();
         initVersions();
+        initManPages();
     }
 
     std::vector<Category> getHelpCategories() {
@@ -1658,6 +2048,10 @@ public:
 
     std::vector<versionHistory> getAllVersions() {
         return allVersions;
+    }
+
+    std::vector<ManPage> getManPage() {
+        return manPage;
     }
 };
 
@@ -3380,7 +3774,7 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
             help.printHelp("sys log", {"show", "clear"}, false, "", true);
         }
     } else if (args[1] == "info") {
-        curVersion = "0.0.0.6";
+        curVersion = "0.6";
         auto user = term.getCurrentUser();
         printScreen("System Info");
 
@@ -5039,6 +5433,200 @@ void cmd_db(const std::vector<std::string>& args, Terminal& term) {
 
 
 
+
+
+
+
+class ManManager: public Config {
+private:
+    const std::string colTitle   = getAnsiColor('B');
+    const std::string colSection = getAnsiColor('9');
+    const std::string colLabel   = getAnsiColor('A');
+    const std::string colValue   = getAnsiColor('F');
+    const std::string colError   = getAnsiColor('C');
+    const std::string colLine    = getAnsiColor('8');
+    const std::string reset      = "\033[0m";
+
+    std::vector<ManPage> manPages;
+
+    int maxPerLine = 5;
+
+    bool findPage(const std::string& name, ManPage& out) const {
+        for (const auto& p : manPages) {
+            if (p.name == name) {
+                out = p;
+                return true;
+            }
+        }
+        return false;
+    }
+
+    int calculateWidth(const ManPage& p) const {
+        int width = 40;
+
+        auto check = [&](const std::string& label, const std::string& value) {
+            int len = 2 + label.size() + 1 + value.size();
+            if (len > width) width = len;
+        };
+
+        check(p.name, p.description);
+        check("command", p.usage);
+
+        for (const auto& opt : p.options) {
+            check(opt.flag, opt.description);
+        }
+
+        for (const auto& ex : p.examples) {
+            check("$", ex);
+        }
+
+        return width + 4;
+    }
+
+    void line(int width, char c = '=') const {
+        std::cout << colLine << std::string(width, c) << reset << "\n";
+    }
+
+    void center(int width, const std::string& text) const {
+        int pad = (width - text.size()) / 2;
+        if (pad < 0) pad = 0;
+
+        std::cout << std::string(pad, ' ')
+                  << colTitle << text << reset << "\n";
+    }
+
+    void section(const std::string& name) const {
+        std::cout << colSection << "\n" << name << ":\n" << reset;
+    }
+
+    void row(int labelWidth, const std::string& label, const std::string& value) const {
+        std::cout << "    "
+                  << colLabel << std::setw(labelWidth) << std::left << label << reset
+                  << " "
+                  << colValue << value << reset << "\n";
+    }
+
+public:
+    void initManPages() {
+        manPages.clear();
+
+        for (const auto& cmd : getManPage()) {
+            manPages.push_back({
+                cmd.name,
+                cmd.description,
+                cmd.usage,
+                cmd.options,
+                cmd.examples
+            });
+        }
+    }
+
+    void showPage(const std::string& name) const {
+        ManPage p;
+
+        if (!findPage(name, p)) {
+            std::cout << colError
+                    << "No manual entry for '" << name << "'\n"
+                    << reset;
+            return;
+        }
+
+        int width = calculateWidth(p);
+        int labelWidth = 15;
+
+        line(width);
+        center(width, "Man Page: " + p.name);
+        line(width);
+
+        section("Name");
+        row(labelWidth, p.name, p.description);
+
+        section("Usage");
+        row(labelWidth, "command", p.usage);
+
+        if (!p.options.empty()) {
+            section("Options");
+
+            for (const auto& opt : p.options) {
+                row(labelWidth, opt.flag, opt.description);
+            }
+        }
+
+        if (!p.examples.empty()) {
+            section("Examples");
+
+            for (const auto& ex : p.examples) {
+                row(labelWidth, "$", ex);
+            }
+        }
+
+        line(width);
+    }
+
+    void listCommands() const {
+        int minWidth = 30;
+        int width = minWidth;
+
+        for (const auto& p : manPages) {
+            int len = p.name.size() + 4;
+            if (len > width) width = len;
+        }
+
+        line(width);
+        center(width, "Available Commands");
+        line(width);
+
+        int currentLineLength = 2;
+
+        std::cout << "  ";
+
+        for (size_t i = 0; i < manPages.size(); i++) {
+            std::string output = manPages[i].name;
+
+            bool isLast = (i == manPages.size() - 1);
+            if (!isLast) output += reset + ", ";
+
+            int needed = (output.size() - reset.size());
+
+            if (currentLineLength + needed > width) {
+                std::cout << "\n  ";
+                currentLineLength = 2;
+            }
+
+            std::cout << colLabel << output << reset;
+            currentLineLength += needed;
+        }
+
+        std::cout << "\n";
+        line(width);
+    }
+};
+
+
+
+void cmd_man(const std::vector<std::string>& args, Terminal& term) {
+    (void) term;
+    ManManager man;
+
+    man.initManPages();
+
+    if (args.size() < 2) {
+        man.listCommands();
+    } else if (args.size() == 2) {
+        man.showPage(args[1]);
+    } else {
+        help.printHelp("man", {"cmd"}, false, "", true);
+    }
+}
+
+
+
+
+
+
+
+
+
 struct Permissions {
     bool read = false;
     bool write = false;
@@ -5266,6 +5854,13 @@ private:
             {"db", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_db(args, terminal);
+                return "";
+            }, 
+            {}}, 
+
+            {"man", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_man(args, terminal);
                 return "";
             }, 
             {}}
