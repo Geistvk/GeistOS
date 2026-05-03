@@ -1336,12 +1336,16 @@ protected:
         std::string description;
     };
 
+    struct Example {
+        std::string example;
+    };
+
     struct ManPage {
         std::string name;
         std::string description;
         std::string usage;
         std::vector<Option> options;
-        std::vector<std::string> examples;
+        std::vector<Example> examples;
     };
 
 
@@ -1363,7 +1367,7 @@ private:
         categories.push_back({
             "General",
             {
-                {"help"}, {"clear"}, {"echo"}, {"ls"}, {"exit"}, {"logout"}, {"date"}
+                {"help"}, {"clear"}, {"echo"}, {"exit"}, {"logout"}, {"date"}
             }
         });
 
@@ -1373,6 +1377,10 @@ private:
                 {
                     {"ping", {"ip"}},
                     "Ping any Ip Adress"
+                },
+                {
+                    {"ls", {"-s"}},
+                    "Show the content of the current Directory, with -s also show File sizes"
                 },
                 {
                     {"db", {"create", "insert", "query", "list", "drop", "clear"}},
@@ -1492,7 +1500,7 @@ private:
             "help",
             {},
             {
-                "help"
+                {"help"}
             }
         });
 
@@ -1502,7 +1510,7 @@ private:
             "clear",
             {},
             {
-                "clear"
+                {"clear"}
             }
         });
 
@@ -1514,8 +1522,8 @@ private:
                 {"<text>", "The text you want to display"}
             },
             {
-                "echo Hello, World!",
-                "echo 'Hello World'"
+                {"echo Hello, World!"},
+                {"echo 'Hello World'"}
             }
         });
 
@@ -1523,13 +1531,10 @@ private:
             "ls",
             "List directory contents",
             "ls [options]",
+            {},
             {
-                {"-l", "Long format"},
-                {"-a", "Show hidden files"}
-            },
-            {
-                "ls",
-                "ls -la"
+                {"ls"},
+                {"ls -la"}
             }
         });
 
@@ -1539,7 +1544,7 @@ private:
             "exit",
             {},
             {
-                "exit"
+                {"exit"}
             }
         });
 
@@ -1549,7 +1554,7 @@ private:
             "logout",
             {},
             {
-                "logout"
+                {"logout"}
             }
         });
 
@@ -1559,7 +1564,7 @@ private:
             "date",
             {},
             {
-                "date"
+                {"date"}
             }
         });
 
@@ -1571,7 +1576,7 @@ private:
                 {"<ip>", "The IP address to ping"}
             },
             {
-                "ping 192.168.1.1"
+                {"ping 192.168.1.1"}
             }
         });
 
@@ -1588,12 +1593,12 @@ private:
                 {"clear", "Clear all data from a table"}
             },
             {
-                "db create <tablename>",
-                "db insert <tablename> <data>",
-                "db query <tablename> <condition>",
-                "db list",
-                "db drop <tablename>",
-                "db clear <tablename>"
+                {"db create <tablename> <col1> <col2> ..."},
+                {"db insert <tablename> <data>"},
+                {"db query <tablename> where <condition>"},
+                {"db list"},
+                {"db drop <tablename>"},
+                {"db clear <tablename>"}
             }
         });
 
@@ -1618,20 +1623,20 @@ private:
                 {"bench", "Run a benchmark test (simulated)"}
             },
             {
-                "sys info",
-                "sys help",
-                "sys uptime",
-                "sys time",
-                "sys tasks",
-                "sys run <taskname>",
-                "sys kill <pid>",
-                "sys mem",
-                "sys cpu",
-                "sys host",
-                "sys config",
-                "sys update",
-                "sys clearcache",
-                "sys bench"
+                {"sys info"},
+                {"sys help"},
+                {"sys uptime"},
+                {"sys time"},
+                {"sys tasks"},
+                {"sys run <taskname>"},
+                {"sys kill <pid>"},
+                {"sys mem"},
+                {"sys cpu"},
+                {"sys host"},
+                {"sys config"},
+                {"sys update"},
+                {"sys clearcache"},
+                {"sys bench"}
             }
         });
 
@@ -1643,9 +1648,9 @@ private:
                 {"<command>", "The command for which to display help"}
             },
             {
-                "man ls",
-                "man echo",
-                "man"
+                {"man ls"},
+                {"man echo"},
+                {"man"}
             }
         });
 
@@ -1655,7 +1660,7 @@ private:
             "dir /s",
             {},
             {
-                "dir /s"
+                {"dir /s"}
             }
         });
 
@@ -1668,8 +1673,8 @@ private:
                 {"<Foldername>", "The name of the folder you want to enter (e.g. documents)"}
             },
             {
-                "cd /home",
-                "cd myFolder"
+                {"cd /home"},
+                {"cd myFolder"}
             }
         });
 
@@ -1681,7 +1686,7 @@ private:
                 {"<foldername>", "The name of the folder you want to create"}
             },
             {
-                "mkdir myFolder"
+                {"mkdir myFolder"}
             }
         });
 
@@ -1694,8 +1699,8 @@ private:
                 {"<foldername>", "The name of the folder you want to remove"}
             },
             {
-                "rm file.txt",
-                "rm myFolder"
+                {"rm file.txt"},
+                {"rm myFolder"}
             }
         });
 
@@ -1707,7 +1712,7 @@ private:
                 {"<file>", "The name of the file you want to create"}
             },
             {
-                "touch file.txt"
+                {"touch file.txt"}
             }
         });
 
@@ -1719,7 +1724,7 @@ private:
                 {"<file>", "The name of the file you want to edit"}
             },
             {
-                "vim file.txt"
+                {"vim file.txt"}
             }
         });
 
@@ -1731,7 +1736,7 @@ private:
                 {"<file>", "The name of the file you want to view"}
             },
             {
-                "cat file.txt"
+                {"cat file.txt"}
             }
         });
 
@@ -1747,11 +1752,11 @@ private:
                 {"help", "Show this help message"}
             },
             {
-                "user list",
-                "user add",
-                "user edit",
-                "user del",
-                "user help"
+                {"user list"},
+                {"user add"},
+                {"user edit"},
+                {"user del"},
+                {"user help"}
             }
         });
 
@@ -1766,10 +1771,10 @@ private:
                 {"help", "Show this help message"}
             },
             {
-                "perm list",
-                "perm edit",
-                "perm info",
-                "perm help"
+                {"perm list"},
+                {"perm edit"},
+                {"perm info"},
+                {"perm help"}
             }
         });
 
@@ -1779,7 +1784,7 @@ private:
             "passwd",
             {},
             {
-                "passwd"
+                {"passwd"}
             }
         });
 
@@ -1791,8 +1796,8 @@ private:
                 {"<package>", "The name of the package you want to install/update"}
             },
             {
-                "apt update",
-                "apt install <package>"
+                {"apt update"},
+                {"apt install <package>"}
             }
         });
 
@@ -1804,7 +1809,7 @@ private:
                 {"<section>", "The Section of the Games you want to play (e.g. casino)"}
             },
             {
-                "games casino"
+                {"games casino"}
             }
         });
 
@@ -1814,7 +1819,7 @@ private:
             "bank",
             {},
             {
-                "bank"
+                {"bank"}
             }
         });
 
@@ -1826,7 +1831,7 @@ private:
                 {"<text>", "The Text you want to print"}
             },
             {
-                "print 'Hello, World!'"
+                {"print 'Hello, World!'"}
             }
         });
 
@@ -1838,7 +1843,7 @@ private:
                 {"<hex-code>", "Hexadecimal color code"}
             },
             {
-                "color 1"
+                {"color 1"}
             }
         });
     }
@@ -2028,7 +2033,8 @@ private:
                         {"Reworked", reworkColor, "The 'help' command to show a small Description for each command"},
                         {"Added", addedColor, "The 'db' command to manage a local simulated Database"},
                         {"Reworked", reworkColor, "The Version numbering system from 0.0.0.1 to 0.1"},
-                        {"Added", addedColor, "The 'man' command to see how to use each command with examples and options"}
+                        {"Added", addedColor, "The 'man' command to see how to use each command with examples and options"},
+                        {"Reworked", reworkColor, "The Manual Entries for some commands to be more informative and have examples"}
                     }
                 }
             }
@@ -2627,101 +2633,109 @@ std::string getExtension(const std::string& filename) {
     return ext;
 }
 
-void listDirectoryStyled(const std::string& path) {
-    const std::string RESET = "\033[0m";
-    const std::string BOLD = "\033[1m";
-    const std::string CYAN2 = "\033[36m";
-    const std::string GREEN = "\033[32m";
-    const std::string GRAY = "\033[90m";
-    WIN32_FIND_DATA findFileData;
-    HANDLE hFind;
+class ListDirectory {
+    private: 
+        const std::string RESET = "\033[0m";
+        const std::string BOLD = "\033[1m";
+        const std::string CYAN2 = "\033[36m";
+        const std::string GREEN = "\033[32m";
+        const std::string GRAY = "\033[90m";
 
-    std::string searchPath = path + "\\*";
-    hFind = FindFirstFile(searchPath.c_str(), &findFileData);
+        void listDirectoryStyled(const std::string& path, bool printSize = false) {
+            WIN32_FIND_DATA findFileData;
+            HANDLE hFind;
 
-    if (hFind == INVALID_HANDLE_VALUE) {
-        std::cout << "Error reading directory\n";
-        return;
-    }
+            std::string fileSize = "";
 
-    int fileCount = 0;
-    int dirCount = 0;
+            std::string searchPath = path + "\\*";
+            hFind = FindFirstFile(searchPath.c_str(), &findFileData);
 
-    std::cout << BOLD
-              << std::left << std::setw(10) << "TYPE"
-              << std::setw(30) << "NAME"
-              << std::setw(12) << "SIZE"
-              << RESET << "\n";
+            if (hFind == INVALID_HANDLE_VALUE) {
+                std::cout << "Error reading directory\n";
+                return;
+            }
 
-    std::cout << "--------------------------------------------------------\n";
+            int fileCount = 0;
+            int dirCount = 0;
 
-    do {
-        std::string name = findFileData.cFileName;
-        if (name == "." || name == "..") continue;
+            std::cout << BOLD
+                    << std::left << std::setw(10) << "TYPE"
+                    << std::setw(30) << "NAME"
+                    << std::setw(12) << "SIZE"
+                    << RESET << "\n";
 
-        bool isDir = findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
+            std::cout << "--------------------------------------------------------\n";
 
-        std::cout << std::left;
+            do {
+                std::string name = findFileData.cFileName;
+                if (name == "." || name == "..") continue;
 
-        if (isDir) {
-            std::cout << CYAN2
-                      << std::setw(10) << "[DIR]"
-                      << std::setw(30) << name
-                      << std::setw(12) << "-"
-                      << RESET << "\n";
-            dirCount++;
-        } else {
-            ULONGLONG size =
-                (static_cast<ULONGLONG>(findFileData.nFileSizeHigh) << 32) |
-                findFileData.nFileSizeLow;
+                bool isDir = findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY;
 
-            std::string ext = getExtension(name);
-            std::string label = "[" + ext + "]";
+                std::cout << std::left;
 
-            std::cout << GREEN
-                      << std::setw(10) << label
-                      << std::setw(30) << name
-                      << std::setw(12) << formatSize(size)
-                      << RESET << "\n";
+                if (isDir) {
+                    std::cout << CYAN2
+                            << std::setw(10) << "[DIR]"
+                            << std::setw(30) << name
+                            << std::setw(12) << "-"
+                            << RESET << "\n";
+                    dirCount++;
+                } else {
+                    ULONGLONG size =
+                        (static_cast<ULONGLONG>(findFileData.nFileSizeHigh) << 32) |
+                        findFileData.nFileSizeLow;
 
-            fileCount++;
+                    if (printSize) fileSize = formatSize(size);
+
+                    std::string ext = getExtension(name);
+                    std::string label = "[" + ext + "]";
+
+                    std::cout << GREEN
+                            << std::setw(10) << label
+                            << std::setw(30) << name
+                            << std::setw(12) << fileSize
+                            << RESET << "\n";
+
+                    fileCount++;
+                }
+
+            } while (FindNextFile(hFind, &findFileData) != 0);
+
+            FindClose(hFind);
+
+            std::cout << "\n";
+            std::cout << GRAY << "Folders: " << dirCount
+                    << " | Files: " << fileCount << RESET << "\n";
         }
 
-    } while (FindNextFile(hFind, &findFileData) != 0);
+    public: 
+        void printDirectory(bool printSize = false) {
+            char buffer[1024];
+            GetModuleFileName(NULL, buffer, sizeof(buffer));
 
-    FindClose(hFind);
+            std::string exePath(buffer);
+            exePath = exePath.substr(0, exePath.find_last_of("\\/"));
 
-    std::cout << "\n";
-    std::cout << GRAY << "Folders: " << dirCount
-              << " | Files: " << fileCount << RESET << "\n";
-}
+            std::string folderPath = exePath + "\\" + currentDictonary;
+
+            std::cout << "\n";
+            std::cout << BOLD << "=== DIRECTORY LIST ===" << RESET << "\n";
+            std::cout << GRAY << "Path: " << RESET << folderPath << "\n";
+            std::cout << "--------------------------------------------------------\n\n";
+
+            listDirectoryStyled(folderPath, printSize);
+
+            std::cout << "\n";
+        }
+};
 
 void cmd_ls(const std::vector<std::string>& args) {
-    const std::string RESET = "\033[0m";
-    const std::string BOLD = "\033[1m";
-    const std::string CYAN2 = "\033[36m";
-    const std::string GREEN = "\033[32m";
-    const std::string YELLOW = "\033[33m";
-    const std::string GRAY = "\033[90m";
+    ListDirectory lsCmd;
 
-    (void)args;
-
-    char buffer[1024];
-    GetModuleFileName(NULL, buffer, sizeof(buffer));
-
-    std::string exePath(buffer);
-    exePath = exePath.substr(0, exePath.find_last_of("\\/"));
-
-    std::string folderPath = exePath + "\\" + currentDictonary;
-
-    std::cout << "\n";
-    std::cout << BOLD << "=== DIRECTORY LIST ===" << RESET << "\n";
-    std::cout << GRAY << "Path: " << RESET << folderPath << "\n";
-    std::cout << "--------------------------------------------------------\n\n";
-
-    listDirectoryStyled(folderPath);
-
-    std::cout << "\n";
+    if (args.size() < 2) lsCmd.printDirectory();
+    else if (args[1] == "-s") lsCmd.printDirectory(true);
+    else help.printHelp("ls", {"-s"}, false, "", true);
 }
 
 void cmd_rm(const std::vector<std::string>& args) {
@@ -5440,8 +5454,8 @@ void cmd_db(const std::vector<std::string>& args, Terminal& term) {
 class ManManager: public Config {
 private:
     const std::string colTitle   = getAnsiColor('B');
-    const std::string colSection = getAnsiColor('9');
-    const std::string colLabel   = getAnsiColor('A');
+    const std::string colSection = getAnsiColor('D');
+    const std::string colLabel   = getAnsiColor('1');
     const std::string colValue   = getAnsiColor('F');
     const std::string colError   = getAnsiColor('C');
     const std::string colLine    = getAnsiColor('8');
@@ -5477,7 +5491,7 @@ private:
         }
 
         for (const auto& ex : p.examples) {
-            check("$", ex);
+            check("$", ex.example);
         }
 
         return width + 4;
@@ -5556,7 +5570,7 @@ public:
             section("Examples");
 
             for (const auto& ex : p.examples) {
-                row(labelWidth, "$", ex);
+                row(labelWidth, "$", ex.example);
             }
         }
 
@@ -5567,8 +5581,8 @@ public:
         int minWidth = 30;
         int width = minWidth;
 
-        for (const auto& p : manPages) {
-            int len = p.name.size() + 4;
+        for (const auto& page : manPages) {
+            int len = page.name.size() + 4;
             if (len > width) width = len;
         }
 
@@ -5583,12 +5597,12 @@ public:
         for (size_t i = 0; i < manPages.size(); i++) {
             std::string output = manPages[i].name;
 
-            bool isLast = (i == manPages.size() - 1);
+            bool isLast = (i == (manPages.size() - 1));
             if (!isLast) output += reset + ", ";
 
             int needed = (output.size() - reset.size());
 
-            if (currentLineLength + needed > width) {
+            if ((currentLineLength + needed) > width) {
                 std::cout << "\n  ";
                 currentLineLength = 2;
             }
@@ -5602,21 +5616,15 @@ public:
     }
 };
 
-
-
 void cmd_man(const std::vector<std::string>& args, Terminal& term) {
     (void) term;
     ManManager man;
 
     man.initManPages();
 
-    if (args.size() < 2) {
-        man.listCommands();
-    } else if (args.size() == 2) {
-        man.showPage(args[1]);
-    } else {
-        help.printHelp("man", {"cmd"}, false, "", true);
-    }
+    if (args.size() < 2) man.listCommands();
+    else if (args.size() == 2) man.showPage(args[1]);
+    else help.printHelp("man", {"cmd"}, false, "", true);
 }
 
 
