@@ -10,6 +10,9 @@
 #include <cctype>
 #include <memory>
 
+#include <io.h>
+#include <fcntl.h>
+
 #include <dxgi.h>
 #include <cstdlib>
 
@@ -890,6 +893,9 @@ private:
     std::string sudoColor  = getAnsiColor('B');
 public:
     Terminal() {
+        SetConsoleOutputCP(CP_UTF8);
+        SetConsoleCP(CP_UTF8);
+
         db.create("users", {"userId", "preName", "lastName", "name", "password", "created", "rank", "userRights"});
 
         db.insert("users", {"0", "Root", "Root", "root", "root123", "2024", "Owner", "1111"});
@@ -2036,6 +2042,12 @@ private:
                         {"Added", addedColor, "The 'man' command to see how to use each command with examples and options"},
                         {"Reworked", reworkColor, "The Manual Entries for some commands to be more informative and have examples"}
                     }
+                }, 
+                {
+                    "0.6.8", 
+                    {
+                        {"Reworked", reworkColor, "Reworked the 'vim' command dynamically expand width and to be more appealing"}
+                    }
                 }
             }
         });
@@ -2820,19 +2832,16 @@ void cmd_touch(const std::vector<std::string>& args) {
     (void)args;
     std::string filename = args[1];
 
-    // aktuellen Arbeitsordner herausfinden (wo .exe liegt)
     char buffer[1024];
 
     GetModuleFileName(NULL, buffer, sizeof(buffer));
     std::string exePath(buffer);
-    exePath = exePath.substr(0, exePath.find_last_of("\\/")); // nur Verzeichnis
+    exePath = exePath.substr(0, exePath.find_last_of("\\/"));
 
     std::string ordnerPfad = exePath + "\\" + currentDictonary;
 
-    // Endgültiger Pfad zur neuen Datei
     std::string filePath = ordnerPfad + filename;
 
-    // Datei erstellen
     std::ofstream newFile(filePath);
     if (newFile.is_open()) {
         std::cout << currentColor + "Created File sucessfully: " << filePath << std::endl;
@@ -2842,82 +2851,314 @@ void cmd_touch(const std::vector<std::string>& args) {
     }
 }
 
-void cmd_vim(const std::vector<std::string>& args) {
-    std::string filename = args[1];
-    char buffer[MAX_PATH];
-
-    // Pfad zur exe
-    GetModuleFileNameA(NULL, buffer, sizeof(buffer));
-    std::string exePath(buffer);
-    exePath = exePath.substr(0, exePath.find_last_of("\\/"));
-
-    std::string filePath = exePath + "\\" + currentDictonary + filename;
-
+class Vim {
+private:
+    std::string filename;
+    std::string filePath;
     std::vector<std::string> lines;
 
-    auto loadFile = [&]() {
-        lines.clear();
-        std::ifstream in(filePath);
-        if (in.is_open()) {
-            std::string line;
-            while (std::getline(in, line)) {
-                lines.push_back(line);
-            }
-            in.close();
-        }
+    const std::string COLOR_BORDER = getAnsiColor('B');
+    const std::string COLOR_LINE   = getAnsiColor('F');
+    const std::string COLOR_CMD    = getAnsiColor('7');
+    const std::string COLOR_ERROR  = getAnsiColor('C');
+    const std::string COLOR_OK     = getAnsiColor('A');
+    const std::string COLOR_INFO   = getAnsiColor('9');
+    const std::string COLOR_DESC   = getAnsiColor('8');
+    const std::string COLOR_RESET  = "\033[0m";
+
+    struct CommandItem {
+        std::string key;
+        std::string desc;
     };
 
-    auto saveFile = [&]() {
-        std::ofstream out(filePath, std::ios::trunc);
-        for (auto& l : lines) out << l << "\n";
-        out.close();
+    std::vector<CommandItem> cmds = {
+        {"w", "Save"},
+        {"q", "Quit"},
+        {"a", "Add"},
+        {"e num", "Edit"},
+        {"d num", "Delete"}
     };
 
-    loadFile(); // Datei initial laden
+public:
+    Vim(const std::string& file)
+        : filename(file) {
+        char buffer[MAX_PATH];
 
-    std::string command;
-    while (true) {
-        // Bildschirm „clearen“
-        system("cls"); 
-        std::cout << currentColor + "===== Editor: " << filename << " =====\n";
-        for (size_t i = 0; i < lines.size(); ++i) {
-            std::cout << i + 1 << ": " << lines[i] << "\n";
-        }
-        std::cout << currentColor + "\nCommands: :q (Quit), :w (Save), :e <Number> (Edit), :a (Add Line), :d <Number> (Delete Line)\n";
-        std::cout << currentColor + "Command: ";
-        std::getline(std::cin, command);
+        GetModuleFileNameA(NULL, buffer, sizeof(buffer));
 
-        if (command == ":q") break;
-        else if (command == ":w") saveFile();
-        else if (command.rfind(":e ", 0) == 0) {
-            int lineNum = std::stoi(command.substr(3)) - 1;
-            if (lineNum >= 0 && lineNum < (int)lines.size()) {
-                std::cout << currentColor + "New Line " << lineNum + 1 << ": ";
-                std::string newLine;
-                std::getline(std::cin, newLine);
-                lines[lineNum] = newLine;
-            }
-        }
-        else if (command == ":a") {
-            std::cout << currentColor + "Add new Line: ";
-            std::string newLine;
-            std::getline(std::cin, newLine);
-            lines.push_back(newLine);
-        }
-        else if (command.rfind(":d ", 0) == 0) {
-            int lineNum = std::stoi(command.substr(3)) - 1;
-            if (lineNum >= 0 && lineNum < (int)lines.size()) {
-                lines.erase(lines.begin() + lineNum);
-            }
-        }
-        else {
-            std::cout << currentColor + "Unknown Command!\n";
-            system("pause");
-        }
+        std::string exePath(buffer);
+        exePath = exePath.substr(0, exePath.find_last_of("\\/"));
+
+        filePath = exePath + "\\" + currentDictonary + filename;
+
+        loadFile();
     }
 
-    saveFile();
-    std::cout << currentColor + "Saved File: " << filePath << std::endl;
+    void loadFile() {
+        lines.clear();
+
+        std::ifstream in(filePath);
+
+        if (!in.is_open())
+            return;
+
+        std::string line;
+
+        while (std::getline(in, line))
+            lines.push_back(line);
+
+        in.close();
+    }
+
+    void saveFile() {
+        std::ofstream out(filePath, std::ios::trunc);
+
+        for (const auto& line : lines)
+            out << line << "\n";
+
+        out.close();
+    }
+
+    void drawCmds(size_t contentWidth) {
+        size_t totalWidth = contentWidth + 8;
+
+        size_t used = 0;
+
+        for (const auto& c : cmds)
+        {
+            used += c.key.length() + c.desc.length() + 4;
+        }
+
+        used += (cmds.size() - 1) * 3;
+
+        size_t freeSpace = (totalWidth > used) ? (totalWidth - used) : 0;
+        size_t gap = (cmds.size() > 1) ? freeSpace / (cmds.size() - 1) : 0;
+        size_t extra = (cmds.size() > 1) ? freeSpace % (cmds.size() - 1) : 0;
+        
+        
+        std::cout << COLOR_BORDER << "│ ";
+
+        for (size_t i = 0; i < cmds.size(); i++) {
+            std::cout
+                << COLOR_CMD << ":" << cmds[i].key
+                << COLOR_BORDER << " "
+                << COLOR_DESC << cmds[i].desc
+                << COLOR_BORDER;
+
+            if (i != cmds.size() - 1) {
+                size_t thisGap = gap + (extra > 0 ? 1 : 0);
+                if (extra > 0) extra--;
+
+                for (size_t j = 0; j < thisGap; j++)
+                    std::cout << ' ';
+
+                std::cout << COLOR_BORDER << "│ ";
+            }
+        }
+
+        size_t printedWidth = used + (cmds.size() - 1) * gap + extra;
+
+        size_t pad = ((totalWidth + 3) > printedWidth)
+            ? ((totalWidth + 3) - printedWidth)
+            : 0;
+
+        for (size_t i = 0; i < pad; i++)
+            std::cout << ' ';
+
+        std::cout << COLOR_BORDER << "│\n" << COLOR_RESET;
+    }
+
+    void drawUI() {
+        system("cls");
+
+        size_t width = 58;
+
+        size_t contentWidth = filename.length() + 6;
+
+        for (const auto& line : lines)
+        {
+            size_t lineWidth = line.length() + 6;
+            if (lineWidth > contentWidth)
+                contentWidth = lineWidth;
+        }
+
+        size_t cmdWidth =
+            10 + 6 +
+            10 + 6 +
+            8  + 6 +
+            12 + 6 +
+            12;
+
+        if (cmdWidth > contentWidth)
+            contentWidth = cmdWidth;
+
+        if (contentWidth < width)
+            contentWidth = width;
+
+        auto printHorizontal = [&](std::string left, std::string mid, std::string right) {
+            std::cout << COLOR_BORDER << left;
+
+            for (size_t i = 0; i < contentWidth; i++)
+                std::cout << mid;
+
+            std::cout << right << "\n" << COLOR_RESET;
+        };
+
+        std::cout << COLOR_BORDER;
+        printHorizontal("┌", "─", "┐");
+
+        std::cout << COLOR_BORDER << "│ " << COLOR_OK << filename;
+
+        size_t padding = contentWidth - filename.length() - 2;
+
+        for (size_t i = 0; i < padding; i++)
+            std::cout << ' ';
+
+        std::cout << COLOR_BORDER << " │\n";
+
+        printHorizontal("├", "─", "┤");
+
+        printHorizontal("│", " ", "│");
+
+        for (size_t i = 0; i < lines.size(); i++) {
+            size_t offset = 1;
+            std::cout << COLOR_BORDER << "│" << COLOR_RESET;
+
+            std::cout << COLOR_INFO << std::setw(2) << i + 1 << " │ " << COLOR_LINE << lines[i];
+
+            size_t used = lines[i].length() + 6;
+            size_t pad = (contentWidth > used) ? (contentWidth - used) : 0;
+
+            for (size_t j = 0; j < (pad + offset); j++)
+                std::cout << ' ';
+
+            std::cout << COLOR_BORDER << "│\n" << COLOR_RESET;
+        }
+
+        printHorizontal("│", " ", "│");
+
+        printHorizontal("├", "─", "┤");
+
+        drawCmds(contentWidth);
+
+        printHorizontal("└", "─", "┘");
+    }
+
+    void run() {
+        std::string command;
+
+        while (true) {
+            drawUI();
+
+            std::cout << COLOR_OK << "vim> " << COLOR_RESET;
+            std::getline(std::cin, command);
+
+            if (command == ":q") {
+                break;
+            }
+
+            else if (command == ":w") {
+                saveFile();
+
+                std::cout
+                    << COLOR_OK
+                    << "File saved.\n";
+
+                system("pause");
+            }
+
+            else if (command == ":a") {
+                std::string newLine;
+
+                std::cout
+                    << COLOR_CMD
+                    << "New Line: ";
+
+                std::getline(std::cin, newLine);
+
+                lines.push_back(newLine);
+                saveFile();
+            }
+
+            else if (command.rfind(":e ", 0) == 0) {
+                try {
+                    int lineNum = std::stoi(command.substr(3)) - 1;
+
+                    if (lineNum >= 0 &&
+                        lineNum < static_cast<int>(lines.size())) {
+
+                        std::string newLine;
+
+                        std::cout
+                            << COLOR_CMD
+                            << "Edit Line "
+                            << lineNum + 1
+                            << ": ";
+
+                        std::getline(std::cin, newLine);
+
+                        lines[lineNum] = newLine;
+                    }
+                    saveFile();
+                }
+                catch (...) {
+                    std::cout
+                        << COLOR_ERROR
+                        << "Invalid line number.\n";
+
+                    system("pause");
+                }
+            }
+
+            else if (command.rfind(":d ", 0) == 0) {
+                try {
+                    int lineNum = std::stoi(command.substr(3)) - 1;
+
+                    if (lineNum >= 0 &&
+                        lineNum < static_cast<int>(lines.size())) {
+
+                        lines.erase(lines.begin() + lineNum);
+                    }
+                    saveFile();
+                }
+                catch (...) {
+                    std::cout
+                        << COLOR_ERROR
+                        << "Invalid line number.\n";
+
+                    system("pause");
+                }
+            }
+
+            else {
+                std::cout
+                    << COLOR_ERROR
+                    << "Unknown command.\n";
+
+                system("pause");
+            }
+        }
+
+        saveFile();
+
+        std::cout
+            << COLOR_OK
+            << "Saved: "
+            << filePath
+            << COLOR_RESET
+            << std::endl;
+    }
+};
+
+void cmd_vim(const std::vector<std::string>& args) {
+    if (args.size() < 2) {
+        help.printHelp("vim", {"file"}, false, "", true);
+
+        return;
+    }
+
+    Vim editor(args[1]);
+    editor.run();
 }
 
 
