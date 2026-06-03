@@ -1183,7 +1183,13 @@ public:
         std::vector<Row> rows;
     };
 
+    std::vector<Section> WindowConf = {};
+
     ConsoleWindow(int w, const std::string& t) : minWidth(w), title(t) {}
+
+    void addConfig(std::vector<Section> config) {
+        WindowConf = config;
+    }
 
     void addSection(const std::string& sectionTitle = "") {
         sections.push_back({sectionTitle, {}});
@@ -1206,6 +1212,22 @@ private:
     const std::string VALUE   = "\033[1;32m";
     const std::string SECTION = "\033[1;33m";
 
+    const std::string TL = "╔";
+    const std::string TR = "╗";
+    const std::string BL = "╚";
+    const std::string BR = "╝";
+
+    const std::string VL = "║";
+
+    const std::string SL = "╠";
+    const std::string SR = "╣";
+
+    const std::string SSL = "╟";
+    const std::string SSR = "╢";
+
+    const std::string H  = "═";
+    const std::string SH = "─";
+
     int calculateWidth() const {
         int w = minWidth;
 
@@ -1224,72 +1246,116 @@ private:
     }
 
 public:
+    void render() {
+        for (size_t i = 0; i < WindowConf.size(); i++) {
+            addSection(WindowConf[i].title);
+            for (const auto& row : WindowConf[i].rows) {
+                addRow(row.label, row.value);
+            }
+        }
+
+        draw();
+    }
+
     void draw() const {
         int width = calculateWidth();
 
-        auto line = [&](char left, char fill, char right) {
-            std::cout << BORDER << left
-                      << std::string(width - 2, fill)
-                      << right << RESET << "\n";
+        auto repeat = [](const std::string& str, int count) {
+            std::string result;
+            result.reserve(str.size() * count);
+
+            for (int i = 0; i < count; ++i)
+                result += str;
+
+            return result;
+        };
+
+        auto topLine = [&]() {
+            std::cout << BORDER << TL
+                    << repeat(H, width - 2)
+                    << TR << RESET << "\n";
+        };
+
+        auto bottomLine = [&]() {
+            std::cout << BORDER << BL
+                    << repeat(H, width - 2)
+                    << BR << RESET << "\n";
+        };
+
+        auto separatorLine = [&]() {
+            std::cout << BORDER << SL
+                    << repeat(H, width - 2)
+                    << SR << RESET << "\n";
+        };
+
+        auto thinSeparator = [&]() {
+            std::cout << BORDER << SSL
+                    << repeat(SH, width - 2)
+                    << SSR << RESET << "\n";
         };
 
         auto centered = [&](const std::string& text, const std::string& color) {
             int pad = (width - 2 - (int)text.size()) / 2;
-            std::cout << BORDER << "|"
-                      << std::string(pad, ' ')
-                      << color << text << RESET
-                      << std::string(width - 2 - pad - text.size(), ' ')
-                      << BORDER << "|" << RESET << "\n";
+
+            std::cout << BORDER << VL
+                    << repeat(" ", pad)
+                    << color << text << RESET
+                    << repeat(" ", width - 2 - pad - text.size())
+                    << BORDER << VL
+                    << RESET << "\n";
         };
 
         auto sectionLine = [&](const std::string& text) {
             std::string t = " " + text + " ";
+
             int total = width - 2;
+            int left = (total - (int)t.size()) / 2;
+            int right = total - (int)t.size() - left;
 
-            int left = (total - t.size()) / 2;
-            int right = total - t.size() - left;
-
-            std::cout << BORDER << "+"
-                      << std::string(left, '-')
-                      << SECTION << t << RESET
-                      << BORDER
-                      << std::string(right, '-')
-                      << "+"
-                      << RESET << "\n";
+            std::cout << BORDER << SSL
+                    << repeat(SH, left)
+                    << SECTION << t << RESET
+                    << BORDER
+                    << repeat(SH, right)
+                    << SSR
+                    << RESET << "\n";
         };
 
         auto row = [&](const Row& r) {
             std::ostringstream out;
-            out << " " << LABEL << std::left << std::setw(18) << r.label << RESET
-                << " " << VALUE << std::left << std::setw(width - 23) << r.value << RESET << " ";
+
+            out << ' '
+                << LABEL << std::left << std::setw(18) << r.label << RESET
+                << ' '
+                << VALUE << std::left << std::setw(width - 23) << r.value << RESET
+                << ' ';
 
             std::string s = out.str();
-            if ((int)s.size() < width - 2)
-                s += std::string(width - 2 - s.size(), ' ');
 
-            std::cout << BORDER << "|" << RESET
-                      << s
-                      << BORDER << "|" << RESET << "\n";
+            if ((int)s.size() < width - 2)
+                s += repeat(" ", width - 2 - s.size());
+
+            std::cout << BORDER << VL << RESET
+                    << s
+                    << BORDER << VL << RESET
+                    << "\n";
         };
 
-        line('=','=', '=');
+        topLine();
         centered(" " + title + " ", TITLE);
-        line('=','=', '=');
+        separatorLine();
 
         for (const auto& sec : sections) {
-
-            if (!sec.title.empty()) {
+            if (!sec.title.empty())
                 sectionLine(sec.title);
-            } else {
-                line('-','-','-');
-            }
+            else
+                thinSeparator();
 
-            for (const auto& r : sec.rows) {
+            for (const auto& r : sec.rows)
                 row(r);
-            }
         }
 
-        line('=','=', '=');
+        bottomLine();
     }
 };
 
@@ -2046,7 +2112,9 @@ private:
                 {
                     "0.6.8", 
                     {
-                        {"Reworked", reworkColor, "Reworked the 'vim' command dynamically expand width and to be more appealing"}
+                        {"Reworked", reworkColor, "Reworked the 'vim' command dynamically expand width and to be more appealing"},
+                        {"Reworked", reworkColor, "Reworked the ConsoleWindow Class to use the uniCode Characters to render a beautiful Window"},
+                        {"Reworked", reworkColor, "Reworked the ConsoleWindow Class to now take a vector of Sections with each Section having a vector of Rows, to be more modular and easy to use"}
                     }
                 }
             }
@@ -3802,26 +3870,34 @@ void cmd_date(const std::vector<std::string>& args, Terminal& term) {
 
     ConsoleWindow win(50, "Current Date");
 
-    win.addSection("General");
-    win.addRow("Date", date.str());
-    win.addRow("Time", time.str());
-    win.addRow("Day", weekdays[ltm->tm_wday]);
+    win.addConfig({
+        {
+            "General", {
+                {"Date", date.str()},
+                {"Time", time.str()},
+                {"Day", weekdays[ltm->tm_wday]}
+            }
+        }, {
+            "Date Details", {
+                {"Year", std::to_string(1900 + ltm->tm_year)},
+                {"Month", std::to_string(1 + ltm->tm_mon)},
+                {"Day", std::to_string(ltm->tm_mday)},
+                {"Day of Year", std::to_string(ltm->tm_yday)}
+            }
+        }, {
+            "Time Details", {
+                {"Hour", std::to_string(ltm->tm_hour)},
+                {"Minute", std::to_string(ltm->tm_min)},
+                {"Second", std::to_string(ltm->tm_sec)}
+            }
+        }, {
+            "Other", {
+                {"Summertime", ltm->tm_isdst ? "Yes" : "No"}
+            }
+        }
+    });
 
-    win.addSection("Date Details");
-    win.addRow("Year", std::to_string(1900 + ltm->tm_year));
-    win.addRow("Month", std::to_string(1 + ltm->tm_mon));
-    win.addRow("Day", std::to_string(ltm->tm_mday));
-    win.addRow("Day of Year", std::to_string(ltm->tm_yday));
-
-    win.addSection("Time Details");
-    win.addRow("Hour", std::to_string(ltm->tm_hour));
-    win.addRow("Minute", std::to_string(ltm->tm_min));
-    win.addRow("Second", std::to_string(ltm->tm_sec));
-
-    win.addSection("Other");
-    win.addRow("Summertime", ltm->tm_isdst ? "Yes" : "No");
-
-    win.draw();
+    win.render();
 }
 
 void cmd_dateOld(const std::vector<std::string>& args, Terminal& term) {
