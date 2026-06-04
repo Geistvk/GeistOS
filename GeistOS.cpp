@@ -847,7 +847,213 @@ public:
     }
 };
 
+
+
+
+
+class SysLog {
+private:
+    struct LogEntry {
+        int id;
+        std::string timestamp;
+        std::string cmd;
+        User* user;
+    };
+
+    std::vector<LogEntry> logs;
+    int nextLogId = 1;
+
+    std::string reset = "\033[0m";
+
+    std::string lineColor = getAnsiColor('7');
+    std::string idColor = getAnsiColor('9');
+    std::string timeColor = getAnsiColor('B');
+    std::string cmdColor = getAnsiColor('A');
+    std::string userColor = getAnsiColor('F');
+    std::string rankColor = getAnsiColor('D');
+    std::string rightsColor = getAnsiColor('E');
+    std::string permColor = getAnsiColor('6');
+
+    struct Column {
+        std::string header;
+        std::function<std::string(const LogEntry&)> value;
+        std::string color;
+        size_t width = 0;
+    };
+
+    std::vector<Column> columns;
+
+    static std::string repeat(const std::string& str, size_t count) {
+        std::string result;
+        for (size_t i = 0; i < count; i++)
+            result += str;
+        return result;
+    }
+
+    static std::string padRight(const std::string& text, size_t width) {
+        if (text.length() >= width)
+            return text;
+        return text + std::string(width - text.length(), ' ');
+    }
+
+    static std::string padLeft(const std::string& text, size_t width) {
+        if (text.length() >= width)
+            return text;
+        return std::string(width - text.length(), ' ') + text;
+    }
+
+    const char* convertInt(int num) {
+        static char buffer[6];
+        sprintf(buffer, "%05d", num);
+        return buffer;
+    }
+
+    static std::string getTimeStamp() {
+        auto now = std::chrono::system_clock::now();
+        std::time_t t = std::chrono::system_clock::to_time_t(now);
+
+        std::tm tm = *std::localtime(&t);
+
+        std::ostringstream oss;
+        oss << std::put_time(&tm, "%d.%m.%Y %H:%M:%S");
+        return oss.str();
+    }
+
+    std::string convertRights(std::string userRightsTmp) {
+        std::string userRights = "";
+        std::string allRights = "rwxs";
+
+        for (int i = 0; i < 4; i++) {
+            if (userRightsTmp[i] == '1') {
+                userRights += allRights[i];
+            } else {
+                userRights += '-';
+            }
+        }
+
+        return userRights;
+    }
+
+    void buildColumns() {
+        columns = {
+            { "CmdId",            [&](const LogEntry& log){ return convertInt(log.id); },                     idColor       },
+            { "Time",             [&](const LogEntry& log){ return log.timestamp; },                          timeColor     },
+            { "Command",          [&](const LogEntry& log){ return log.cmd; },                                cmdColor      },
+            { "User",             [&](const LogEntry& log){ return log.user->name; },                         userColor     },
+            { "Rank",             [&](const LogEntry& log){ return log.user->rank; },                         rankColor     },
+            { "Rights",           [&](const LogEntry& log){ return log.user->userRights; },                   rightsColor   },
+            { "Permissions",      [&](const LogEntry& log){ return convertRights(log.user->userRights); },    permColor     }
+        };
+    }
+
+    void calcWidth() {
+        size_t padding = 0;
+
+        for (auto& col : columns) {
+            col.width = col.header.length();
+
+            for (const auto& log : logs) {
+                col.width = std::max(col.width, col.value(log).length());
+            }
+            col.width += padding;
+        }
+    }
+
+public:
+    void addLog(const std::string& input, User* user) {
+        logs.push_back({
+            nextLogId++,
+            getTimeStamp(),
+            input,
+            user
+        });
+    }
+
+    void exampleData(User* user) {
+        addLog("ls", user);
+        addLog("pwd", user);
+        addLog("echo Hello, World!", user);
+        addLog("db query users", user);
+        addLog("sudo rm -rf /", user);
+    }
+
+    void getCmdLog() {
+        buildColumns();
+        calcWidth();
+
+        std::string out;
+
+        out += lineColor + "┌";
+        for (size_t i = 0; i < columns.size(); i++) {
+            out += repeat("─", columns[i].width + 2);
+            out += (i + 1 < columns.size()) ? "┬" : "┐";
+        }
+        out += reset + "\n";
+
+        out += lineColor + "│ " + reset;
+
+        for (size_t i = 0; i < columns.size(); i++) {
+            auto& c = columns[i];
+
+            out += c.color;
+            out += padRight(c.header, c.width);
+            out += reset;
+
+            out += lineColor + " │ " + reset;
+        }
+
+        out += "\n";
+
+        out += lineColor + "├";
+        for (size_t i = 0; i < columns.size(); i++) {
+            out += repeat("─", columns[i].width + 2);
+            out += (i + 1 < columns.size()) ? "┼" : "┤";
+        }
+        out += reset + "\n";
+
+        for (const auto& log : logs) {
+            out += lineColor + "│ " + reset;
+
+            for (size_t i = 0; i < columns.size(); i++) {
+                auto& c = columns[i];
+
+                std::string val = c.value(log);
+
+                if (c.header == "ID")
+                    val = padLeft(val, c.width);
+                else
+                    val = padRight(val, c.width);
+
+                out += c.color + val + reset;
+                out += lineColor + " │ " + reset;
+            }
+
+            out += "\n";
+        }
+
+        out += lineColor + "└";
+        for (size_t i = 0; i < columns.size(); i++) {
+            out += repeat("─", columns[i].width + 2);
+            out += (i + 1 < columns.size()) ? "┴" : "┘";
+        }
+        out += reset + "\n";
+
+        std::cout << out;
+    }
+
+    void clearCmdLog() {
+        logs.clear();
+        nextLogId = 1;
+    }
+};
+
+
+
+
+
 DataBase db;
+
+SysLog sysLog;
 
 
 
@@ -976,6 +1182,8 @@ public:
             currentUser = &users[username];
             printScreen("Geist OS");
 
+            sysLog.exampleData(currentUser);
+
             std::cout << currentColor + "Welcome, \033[1;32m" << username << "\033[0m!\n\n";
             return true;
         } else {
@@ -1034,11 +1242,7 @@ public:
                 std::string pipeInput;
                 bool error = false;
 
-                cmdLog.push_back({
-                    cmdLogId++,
-                    getTimeStamp(),
-                    input
-                });
+                sysLog.addLog(input, currentUser);
 
                 for (const auto& raw : pipeline)
                 {
@@ -1142,22 +1346,6 @@ public:
         }
     }
 
-    void getCmdLog() {
-        for (size_t i = 0; i < cmdLog.size(); i++) {
-            std::cout   << textColor2   << cmdLog[i].logId
-                        << standard     << ". [ "
-                        << accentColor  << cmdLog[i].timestamp
-                        << standard     << " ] "
-                        << textColor1   << cmdLog[i].cmd
-                        << standard     << "\n";
-        }
-    }
-
-    void clearCmdLog() {
-        cmdLog.clear();
-        cmdLogId = 1;
-    }
-
     void stop() { running = false; }
 
     User* getCurrentUser() { return currentUser; }
@@ -1168,6 +1356,7 @@ public:
         }
     }
 };
+
 
 
 
@@ -2114,7 +2303,8 @@ private:
                     {
                         {"Reworked", reworkColor, "The 'vim' command dynamically expand width and to be more appealing"},
                         {"Reworked", reworkColor, "The ConsoleWindow Class to use the uniCode Characters to render a beautiful Window"},
-                        {"Reworked", reworkColor, "The ConsoleWindow Class to now take a vector of Sections with each Section having a vector of Rows, to be more modular and easy to use"}
+                        {"Reworked", reworkColor, "The ConsoleWindow Class to now take a vector of Sections with each Section having a vector of Rows, to be more modular and easy to use"},
+                        {"Reworked", reworkColor, "The Log System to now save the Logs with what user executed the command and to dynamically display them"}
                     }
                 }
             }
@@ -2992,8 +3182,7 @@ public:
 
         size_t used = 0;
 
-        for (const auto& c : cmds)
-        {
+        for (const auto& c : cmds) {
             used += c.key.length() + c.desc.length() + 4;
         }
 
@@ -4097,9 +4286,9 @@ void cmd_sys(const std::vector<std::string>& args, Terminal& term) {
 
         if (args[2] == "show") {
             printScreen("CMD History");
-            term.getCmdLog();
+            sysLog.getCmdLog();
         } else if (args[2] == "clear") {
-            term.clearCmdLog();
+            sysLog.clearCmdLog();
             std::cout << C_OK << "Log cleared." << C_RESET << "\n";
         } else {
             help.printHelp("sys log", {"show", "clear"}, false, "", true);
