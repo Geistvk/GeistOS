@@ -2112,9 +2112,9 @@ private:
                 {
                     "0.6.8", 
                     {
-                        {"Reworked", reworkColor, "Reworked the 'vim' command dynamically expand width and to be more appealing"},
-                        {"Reworked", reworkColor, "Reworked the ConsoleWindow Class to use the uniCode Characters to render a beautiful Window"},
-                        {"Reworked", reworkColor, "Reworked the ConsoleWindow Class to now take a vector of Sections with each Section having a vector of Rows, to be more modular and easy to use"}
+                        {"Reworked", reworkColor, "The 'vim' command dynamically expand width and to be more appealing"},
+                        {"Reworked", reworkColor, "The ConsoleWindow Class to use the uniCode Characters to render a beautiful Window"},
+                        {"Reworked", reworkColor, "The ConsoleWindow Class to now take a vector of Sections with each Section having a vector of Rows, to be more modular and easy to use"}
                     }
                 }
             }
