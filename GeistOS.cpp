@@ -1738,6 +1738,10 @@ private:
             "UI & Output",
             {
                 {
+                    {"draw", {"frame"}}, 
+                    "Draw a Frame around the Terminal Window"
+                },
+                {
                     {"print", {"text"}}, 
                     "Print any Text in the Big Letters"
                 },
@@ -2085,6 +2089,18 @@ private:
         });
 
         manPage.push_back({
+            "draw",
+            "Draw a Frame around the Terminal Window",
+            "draw <frame>",
+            {
+                {"<frame>", "The frame you want to draw"}
+            },
+            {
+                {"draw frame"}
+            }
+        });
+
+        manPage.push_back({
             "print",
             "Print any Text in the Big Letters",
             "print <text>",
@@ -2301,10 +2317,12 @@ private:
                 {
                     "0.6.8", 
                     {
-                        {"Reworked", reworkColor, "The 'vim' command dynamically expand width and to be more appealing"},
+                        {"Reworked", reworkColor, "The 'vim' command to dynamically expand width and to be more appealing"},
                         {"Reworked", reworkColor, "The ConsoleWindow Class to use the uniCode Characters to render a beautiful Window"},
                         {"Reworked", reworkColor, "The ConsoleWindow Class to now take a vector of Sections with each Section having a vector of Rows, to be more modular and easy to use"},
-                        {"Reworked", reworkColor, "The Log System to now save the Logs with what user executed the command and to dynamically display them"}
+                        {"Reworked", reworkColor, "The Log System to now save the Logs with what user executed the command and to dynamically display them"},
+                        {"Reworked", reworkColor, "The 'vim' command to now display the command list and the user input at the bottom of the window"},
+                        {"Added", addedColor, "The 'draw' command to draw different kind of shapes, for now you can only draw a frame around the terminal window"}
                     }
                 }
             }
@@ -3114,6 +3132,12 @@ private:
     std::string filename;
     std::string filePath;
     std::vector<std::string> lines;
+    int linesCount;
+    int minHeight = 6;
+    size_t contentWidth;
+
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    int columns, rows;
 
     const std::string COLOR_BORDER = getAnsiColor('B');
     const std::string COLOR_LINE   = getAnsiColor('F');
@@ -3136,6 +3160,63 @@ private:
         {"e num", "Edit"},
         {"d num", "Delete"}
     };
+
+    void printHorizontal(std::string left, std::string mid, std::string right) {
+        std::cout << COLOR_BORDER << left;
+
+        for (size_t i = 0; i < contentWidth; i++)
+            std::cout << mid;
+
+        std::cout << right << "\n" << COLOR_RESET;
+    }
+
+    void printSeparator(
+        const std::string& start,
+        const std::string& mid,
+        const std::string& sep,
+        const std::string& end,
+        size_t gap,
+        size_t /*extra*/)
+    {
+        std::cout << COLOR_BORDER << start;
+
+        for (size_t i = 0; i < cmds.size(); ++i)
+        {
+            size_t cellWidth = 2 + cmds[i].key.length() + 2 + cmds[i].desc.length();
+            size_t width = cellWidth + gap;
+
+            if (i > 1) width--;
+
+            for (size_t j = 0; j < width; ++j)
+                std::cout << mid;
+
+            if (i + 1 < cmds.size()) std::cout << COLOR_BORDER << sep;
+            else std::cout << COLOR_BORDER << mid;
+        }
+
+        std::cout << COLOR_BORDER << end << '\n';
+    }
+
+    void calcScreenSize() {
+        GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+        columns = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+        rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+
+        (void)columns;
+    }
+
+    void renderBottomBox() {
+        calcScreenSize();
+
+        linesCount += minHeight;
+
+        for (int i = 0; i < (rows - linesCount); i++)
+            std::cout << "\n";
+
+        //printHorizontal("┌", "─", "┐");
+        drawCmds(contentWidth);
+        //printHorizontal("└", "─", "┘");
+    }
 
 public:
     Vim(const std::string& file)
@@ -3177,7 +3258,8 @@ public:
         out.close();
     }
 
-    void drawCmds(size_t contentWidth) {
+    void drawCmds(size_t contentWidthTmp) {
+        contentWidth = contentWidthTmp;
         size_t totalWidth = contentWidth + 8;
 
         size_t used = 0;
@@ -3191,7 +3273,8 @@ public:
         size_t freeSpace = (totalWidth > used) ? (totalWidth - used) : 0;
         size_t gap = (cmds.size() > 1) ? freeSpace / (cmds.size() - 1) : 0;
         size_t extra = (cmds.size() > 1) ? freeSpace % (cmds.size() - 1) : 0;
-        
+
+        printSeparator("┌", "─", "┬", "┐", gap, extra);
         
         std::cout << COLOR_BORDER << "│ ";
 
@@ -3223,14 +3306,16 @@ public:
             std::cout << ' ';
 
         std::cout << COLOR_BORDER << "│\n" << COLOR_RESET;
+
+        printSeparator("└", "─", "┴", "┘", gap, extra);
     }
 
     void drawUI() {
         system("cls");
-
+        linesCount = minHeight;
         size_t width = 58;
 
-        size_t contentWidth = filename.length() + 6;
+        contentWidth = filename.length() + 6;
 
         for (const auto& line : lines)
         {
@@ -3251,15 +3336,6 @@ public:
 
         if (contentWidth < width)
             contentWidth = width;
-
-        auto printHorizontal = [&](std::string left, std::string mid, std::string right) {
-            std::cout << COLOR_BORDER << left;
-
-            for (size_t i = 0; i < contentWidth; i++)
-                std::cout << mid;
-
-            std::cout << right << "\n" << COLOR_RESET;
-        };
 
         std::cout << COLOR_BORDER;
         printHorizontal("┌", "─", "┐");
@@ -3290,15 +3366,18 @@ public:
                 std::cout << ' ';
 
             std::cout << COLOR_BORDER << "│\n" << COLOR_RESET;
+            linesCount++;
         }
 
         printHorizontal("│", " ", "│");
 
-        printHorizontal("├", "─", "┤");
-
-        drawCmds(contentWidth);
+        //printHorizontal("├", "─", "┤");
 
         printHorizontal("└", "─", "┘");
+
+        std::cout << "\n";
+
+        renderBottomBox();
     }
 
     void run() {
@@ -3319,7 +3398,7 @@ public:
 
                 std::cout
                     << COLOR_OK
-                    << "File saved.\n";
+                    << "File saved.     |";
 
                 system("pause");
             }
@@ -3361,7 +3440,7 @@ public:
                 catch (...) {
                     std::cout
                         << COLOR_ERROR
-                        << "Invalid line number.\n";
+                        << "Invalid line number.    |";
 
                     system("pause");
                 }
@@ -3381,7 +3460,7 @@ public:
                 catch (...) {
                     std::cout
                         << COLOR_ERROR
-                        << "Invalid line number.\n";
+                        << "Invalid line number.    |";
 
                     system("pause");
                 }
@@ -3390,7 +3469,7 @@ public:
             else {
                 std::cout
                     << COLOR_ERROR
-                    << "Unknown command.\n";
+                    << "Unknown command.    |";
 
                 system("pause");
             }
@@ -6135,6 +6214,70 @@ void cmd_man(const std::vector<std::string>& args, Terminal& term) {
 
 
 
+class Draw {
+    private: 
+        const std::string COLOR_BORDER = getAnsiColor('B');
+        const std::string COLOR_LINE   = getAnsiColor('F');
+        const std::string COLOR_CMD    = getAnsiColor('7');
+        const std::string COLOR_ERROR  = getAnsiColor('C');
+        const std::string COLOR_OK     = getAnsiColor('A');
+        const std::string COLOR_INFO   = getAnsiColor('9');
+        const std::string COLOR_DESC   = getAnsiColor('8');
+        const std::string COLOR_RESET  = "\033[0m";
+
+        size_t columns;
+        size_t rows;
+        CONSOLE_SCREEN_BUFFER_INFO csbi;
+
+        void calcScreenSize() {
+            GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+            columns = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+            rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+
+            (void)columns; 
+
+            //printf("columns: %d\n", columns);
+            //printf("rows: %d\n", rows);
+        }
+
+        void printHorizontal(std::string left, std::string mid, std::string right) {
+            std::cout << COLOR_BORDER << left;
+
+            for (size_t i = 0; i < columns - 2; i++)
+                std::cout << mid;
+
+            std::cout << right << "\n" << COLOR_RESET;
+        }
+
+    public:
+
+        void frame() {
+            calcScreenSize();
+
+            printHorizontal("┌", "─", "┐");
+
+            for (size_t i = 0; i < rows - 3; i++) 
+                printHorizontal("│", " ", "│");
+
+            printHorizontal("└", "─", "┘");
+        }
+};
+
+
+
+
+
+
+void cmd_draw(const std::vector<std::string>& args, Terminal& term) {
+    (void) term;
+    Draw draw;
+
+    if (args[1] == "frame") draw.frame();
+    else help.printHelp("draw", {"frame"}, false, "", true);
+}
+
+
+
 
 
 
@@ -6375,6 +6518,13 @@ private:
             {"man", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_man(args, terminal);
+                return "";
+            }, 
+            {}},
+
+            {"draw", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_draw(args, terminal);
                 return "";
             }, 
             {}}
