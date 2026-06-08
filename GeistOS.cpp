@@ -1738,8 +1738,8 @@ private:
             "UI & Output",
             {
                 {
-                    {"draw", {"frame"}}, 
-                    "Draw a Frame around the Terminal Window"
+                    {"draw", {"frame", "square"}}, 
+                    "Draw some Shapes in the Terminal"
                 },
                 {
                     {"print", {"text"}}, 
@@ -2090,13 +2090,14 @@ private:
 
         manPage.push_back({
             "draw",
-            "Draw a Frame around the Terminal Window",
-            "draw <frame>",
+            "Draw some Shapes in the Terminal",
+            "draw <shape>",
             {
-                {"<frame>", "The frame you want to draw"}
+                {"<shape>", "The type of shape you want to draw"}
             },
             {
-                {"draw frame"}
+                {"draw frame"},
+                {"draw square"}
             }
         });
 
@@ -2322,7 +2323,8 @@ private:
                         {"Reworked", reworkColor, "The ConsoleWindow Class to now take a vector of Sections with each Section having a vector of Rows, to be more modular and easy to use"},
                         {"Reworked", reworkColor, "The Log System to now save the Logs with what user executed the command and to dynamically display them"},
                         {"Reworked", reworkColor, "The 'vim' command to now display the command list and the user input at the bottom of the window"},
-                        {"Added", addedColor, "The 'draw' command to draw different kind of shapes, for now you can only draw a frame around the terminal window"}
+                        {"Added", addedColor, "The 'draw' command to draw different kind of shapes, for now you can only draw a frame around the terminal window"},
+                        {"Reworked", reworkColor, "The 'draw square' command to now print the square in a correct formatted style"}
                     }
                 }
             }
@@ -3180,8 +3182,7 @@ private:
     {
         std::cout << COLOR_BORDER << start;
 
-        for (size_t i = 0; i < cmds.size(); ++i)
-        {
+        for (size_t i = 0; i < cmds.size(); ++i) {
             size_t cellWidth = 2 + cmds[i].key.length() + 2 + cmds[i].desc.length();
             size_t width = cellWidth + gap;
 
@@ -3361,6 +3362,7 @@ public:
 
             size_t used = lines[i].length() + 6;
             size_t pad = (contentWidth > used) ? (contentWidth - used) : 0;
+
 
             for (size_t j = 0; j < (pad + offset); j++)
                 std::cout << ' ';
@@ -6234,10 +6236,7 @@ class Draw {
             columns = csbi.srWindow.Right - csbi.srWindow.Left + 1;
             rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
 
-            (void)columns; 
-
-            //printf("columns: %d\n", columns);
-            //printf("rows: %d\n", rows);
+            (void)columns;
         }
 
         void printHorizontal(std::string left, std::string mid, std::string right) {
@@ -6250,6 +6249,12 @@ class Draw {
         }
 
     public:
+        int getIntInput(std::string prompt) {
+            int value;
+            std::cout << COLOR_CMD << prompt << ": " << COLOR_RESET;
+            std::cin >> value;
+            return value;
+        }
 
         void frame() {
             calcScreenSize();
@@ -6261,6 +6266,161 @@ class Draw {
 
             printHorizontal("└", "─", "┘");
         }
+
+        void square(int size) {
+            if (size < 6)
+                return;
+
+            const int width  = size * 2;
+            const int height = size;
+
+            const int cx = width / 2;
+            const int cy = height / 2;
+
+            const double maxDist = std::sqrt(cx * cx + cy * cy);
+
+            for (int y = 0; y < height; ++y) {
+                std::cout << COLOR_BORDER;
+
+                for (int x = 0; x < width; ++x) {
+                    bool isTop    = (y == 0);
+                    bool isBottom = (y == height - 1);
+                    bool isLeft   = (x == 0);
+                    bool isRight  = (x == width - 1);
+
+                    if (x == 0 && y == 0)
+                        std::cout << "┏";
+                    else if (x == width - 1 && y == 0)
+                        std::cout << "┓";
+                    else if (x == 0 && y == height - 1)
+                        std::cout << "┗";
+                    else if (x == width - 1 && y == height - 1)
+                        std::cout << "┛";
+                    else if (isTop || isBottom)
+                        std::cout << "━";
+                    else if (isLeft || isRight)
+                        std::cout << "┃";
+                    else {
+                        int dx = x - cx;
+                        int dy = y - cy;
+
+                        double r = std::sqrt(dx * dx + dy * dy);
+
+                        double nx = dx / (double)cx;
+                        double ny = dy / (double)cy;
+
+                        double radial = 1.0 - (r / maxDist);
+
+                        double diagonal = 1.0 - std::abs(nx + ny) * 0.5;
+
+                        double bands =
+                            std::sin(r * 0.6) * 0.35 +
+                            std::cos((nx - ny) * 3.0) * 0.25;
+
+                        double value = radial * 0.6 + diagonal * 0.25 + bands * 0.15;
+
+                        std::string c;
+
+                        if (value > 0.75)
+                            c = "█";
+                        else if (value > 0.6)
+                            c = "▓";
+                        else if (value > 0.45)
+                            c = "▒";
+                        else if (value > 0.3)
+                            c = "░";
+                        else
+                            c = " ";
+
+                        std::cout << c;
+                    }
+                }
+
+                std::cout << COLOR_RESET << '\n';
+            }
+        }
+
+        void triangle(int size) {
+            if (size < 3)
+                return;
+
+            const int width  = size * 2 - 1;
+            const int height = size;
+
+            const double cx = width / 2.0;
+
+            for (int y = 0; y < height; ++y) {
+                std::cout << COLOR_BORDER;
+
+                for (int x = 0; x < width; ++x) {
+                    const int leftEdge  = (int)(cx - y);
+                    const int rightEdge = (int)(cx + y);
+
+                    const bool top    = (y == 0 && x == (int)cx);
+                    const bool bottom = (y == height - 1);
+                    const bool left   = (x == leftEdge);
+                    const bool right  = (x == rightEdge);
+
+                    if (top) {
+                        std::cout << "╻";
+                    } else if (bottom) {
+                        if (x == leftEdge)
+                            std::cout << "┗";
+                        else if (x == rightEdge)
+                            std::cout << "┛";
+                        else
+                            std::cout << "━";
+                    } else if (left) {
+                        std::cout << "╱";
+                    } else if (right) {
+                        std::cout << "╲";
+                    } else if (x > leftEdge && x < rightEdge) {
+                        int dx = x - cx;
+                        int dy = y;
+
+                        double r = std::sqrt(dx * dx + dy * dy);
+
+                        double maxR = std::sqrt((cx * cx) + (height * height));
+
+                        double radial = 1.0 - (r / maxR);
+
+                        double vertical = 1.0 - (y / (double)height);
+
+                        double wave =
+                            std::sin(x * 0.35) * 0.25 +
+                            std::cos((x + y) * 0.25) * 0.25;
+
+                        double diagonal =
+                            1.0 - std::abs((x - cx) / (y + 1.0)) * 0.6;
+
+                        double value =
+                            radial * 0.45 +
+                            vertical * 0.25 +
+                            wave * 0.20 +
+                            diagonal * 0.10;
+
+                        std::string c;
+
+                        if (value > 0.75)
+                            c = "█";
+                        else if (value > 0.6)
+                            c = "▓";
+                        else if (value > 0.45)
+                            c = "▒";
+                        else if (value > 0.3)
+                            c = "░";
+                        else
+                            c = " ";
+
+                        std::cout << c;
+                    } else {
+                        std::cout << " ";
+                    }
+                }
+
+                std::cout << COLOR_RESET << '\n';
+            }
+        }
 };
 
 
@@ -6270,10 +6430,17 @@ class Draw {
 
 void cmd_draw(const std::vector<std::string>& args, Terminal& term) {
     (void) term;
+    if (args.size() < 2) {
+        help.printHelp("draw", {"frame", "square", "triangle"}, false, "", true);
+        return;
+    }
+
     Draw draw;
 
     if (args[1] == "frame") draw.frame();
-    else help.printHelp("draw", {"frame"}, false, "", true);
+    else if (args[1] == "square") draw.square(draw.getIntInput("Enter Size"));
+    else if (args[1] == "triangle") draw.triangle(draw.getIntInput("Enter Size"));
+    else help.printHelp("draw", {"frame", "square", "triangle"}, false, "", true);
 }
 
 
