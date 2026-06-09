@@ -1738,7 +1738,7 @@ private:
             "UI & Output",
             {
                 {
-                    {"draw", {"frame", "square"}}, 
+                    {"draw", {"frame", "square", "triangle"}}, 
                     "Draw some Shapes in the Terminal"
                 },
                 {
@@ -2091,13 +2091,15 @@ private:
         manPage.push_back({
             "draw",
             "Draw some Shapes in the Terminal",
-            "draw <shape>",
+            "draw <shape> <size>",
             {
-                {"<shape>", "The type of shape you want to draw"}
+                {"<shape>", "The type of shape you want to draw"},
+                {"<size>", "The size of the shape you want to draw"}
             },
             {
                 {"draw frame"},
-                {"draw square"}
+                {"draw square 10"},
+                {"draw triangle 20"}
             }
         });
 
@@ -2324,7 +2326,8 @@ private:
                         {"Reworked", reworkColor, "The Log System to now save the Logs with what user executed the command and to dynamically display them"},
                         {"Reworked", reworkColor, "The 'vim' command to now display the command list and the user input at the bottom of the window"},
                         {"Added", addedColor, "The 'draw' command to draw different kind of shapes, for now you can only draw a frame around the terminal window"},
-                        {"Reworked", reworkColor, "The 'draw square' command to now print the square in a correct formatted style"}
+                        {"Reworked", reworkColor, "The 'draw square' command to now print the square in a correct formatted style"},
+                        {"Reworked", reworkColor, "The 'draw' command to now have a dynamic shape drawing algorythm and a new logic of choosing a shape"}
                     }
                 }
             }
@@ -2537,6 +2540,11 @@ public:
 
                 std::cout << "\n";
             }
+        }
+
+        if (isUsage) {
+            std::cout   << errorColor << "If you don't know how to use this command, type: " 
+                        << textColor1 << "man " << cmd << "\n";
         }
     }
 
@@ -6217,7 +6225,7 @@ void cmd_man(const std::vector<std::string>& args, Terminal& term) {
 
 
 class Draw {
-    private: 
+    public: 
         const std::string COLOR_BORDER = getAnsiColor('B');
         const std::string COLOR_LINE   = getAnsiColor('F');
         const std::string COLOR_CMD    = getAnsiColor('7');
@@ -6226,7 +6234,7 @@ class Draw {
         const std::string COLOR_INFO   = getAnsiColor('9');
         const std::string COLOR_DESC   = getAnsiColor('8');
         const std::string COLOR_RESET  = "\033[0m";
-
+    private: 
         size_t columns;
         size_t rows;
         CONSOLE_SCREEN_BUFFER_INFO csbi;
@@ -6248,12 +6256,61 @@ class Draw {
             std::cout << right << "\n" << COLOR_RESET;
         }
 
+        // Source - https://stackoverflow.com/a/17976083
+        // Posted by szx, modified by community. See post 'Timeline' for change history
+        // Retrieved 2026-06-09, License - CC BY-SA 3.0
+
+        bool is_number(const std::string &s) {
+            return !s.empty() && std::all_of(s.begin(), s.end(), ::isdigit);
+        }
+
+
     public:
         int getIntInput(std::string prompt) {
             int value;
             std::cout << COLOR_CMD << prompt << ": " << COLOR_RESET;
             std::cin >> value;
             return value;
+        }
+
+        void handleShape(const std::vector<std::string>& args, 
+                        std::function<void(int)> funcFilled, 
+                        std::function<void(int)> funcEmpty) {
+            if (args.size() < 3) {
+                help.printHelp("draw " + args[1], {"filled size", "size"}, false, "", true);
+                return;
+            }
+            
+            if (args[2] == "filled") {
+                if (args.size() < 4) {
+                    help.printHelp("draw " + args[1] + " filled", {"size"}, false, "", true);
+                    return;
+                } 
+                
+                if (!is_number(args[3])) {
+                    help.printHelp("draw " + args[1] + " filled", {"size"}, false, "", true);
+                    return;
+                } else if (std::stoi(args[3]) < 6) {
+                    std::cout << COLOR_ERROR << "Size must be at least 6\n" << COLOR_RESET;
+                    return;
+                } else if (std::stoi(args[3]) >= 6) {
+                    funcFilled(std::stoi(args[3]));
+                } else {
+                    help.printHelp("draw " + args[1] + " filled", {"size"}, false, "", true);
+                    return;
+                }
+            } else if (!is_number(args[2])) {
+                help.printHelp("draw " + args[1], {"filled size", "size"}, false, "", true);
+                return;
+            } else if (std::stoi(args[2]) < 6) {
+                std::cout << COLOR_ERROR << "Size must be at least 6\n" << COLOR_RESET;
+                return;
+            } else if (std::stoi(args[2]) >= 6) {
+                funcEmpty(std::stoi(args[2]));
+            } else {
+                help.printHelp("draw " + args[1], {"filled size", "size"}, false, "", true);
+                return;
+            }
         }
 
         void frame() {
@@ -6267,7 +6324,7 @@ class Draw {
             printHorizontal("└", "─", "┘");
         }
 
-        void square(int size) {
+        void squareFilled(int size) {
             if (size < 6)
                 return;
 
@@ -6340,8 +6397,44 @@ class Draw {
             }
         }
 
-        void triangle(int size) {
-            if (size < 3)
+        void squareEmpty(int size) {
+            if (size < 6)
+                return;
+
+            const int width  = size * 2;
+            const int height = size;
+
+            for (int y = 0; y < height; ++y) {
+                std::cout << COLOR_BORDER;
+
+                for (int x = 0; x < width; ++x) {
+                    bool isTop    = (y == 0);
+                    bool isBottom = (y == height - 1);
+                    bool isLeft   = (x == 0);
+                    bool isRight  = (x == width - 1);
+
+                    if (x == 0 && y == 0)
+                        std::cout << "┏";
+                    else if (x == width - 1 && y == 0)
+                        std::cout << "┓";
+                    else if (x == 0 && y == height - 1)
+                        std::cout << "┗";
+                    else if (x == width - 1 && y == height - 1)
+                        std::cout << "┛";
+                    else if (isTop || isBottom)
+                        std::cout << "━";
+                    else if (isLeft || isRight)
+                        std::cout << "┃";
+                    else
+                        std::cout << " ";
+                }
+
+                std::cout << COLOR_RESET << '\n';
+            }
+        }
+
+        void triangleFilled(int size) {
+            if (size < 6)
                 return;
 
             const int width  = size * 2 - 1;
@@ -6421,9 +6514,78 @@ class Draw {
                 std::cout << COLOR_RESET << '\n';
             }
         }
+
+        void triangleEmpty(int size) {
+            if (size < 6)
+                return;
+
+            const int width  = size * 2 - 1;
+            const int height = size;
+
+            const double cx = width / 2.0;
+
+            for (int y = 0; y < height; ++y) {
+                std::cout << COLOR_BORDER;
+
+                for (int x = 0; x < width; ++x) {
+                    const int leftEdge  = (int)(cx - y);
+                    const int rightEdge = (int)(cx + y);
+
+                    const bool top    = (y == 0 && x == (int)cx);
+                    const bool bottom = (y == height - 1);
+                    const bool left   = (x == leftEdge);
+                    const bool right  = (x == rightEdge);
+
+                    if (top) {
+                        std::cout << "╻";
+                    } else if (bottom) {
+                        if (x == leftEdge)
+                            std::cout << "┗";
+                        else if (x == rightEdge)
+                            std::cout << "┛";
+                        else
+                            std::cout << "━";
+                    } else if (left) {
+                        std::cout << "╱";
+                    } else if (right) {
+                        std::cout << "╲";
+                    } else {
+                        std::cout << " ";
+                    }
+                }
+
+                std::cout << COLOR_RESET << '\n';
+            }
+        }
 };
 
 
+
+
+class drawManager {
+    private: 
+        struct Shape {
+            std::string title;
+            std::function<void()> draw = [] {};
+        };
+
+        std::vector<Shape> shapes;
+    public: 
+        void setShapes(std::vector<Shape> newShapes) {
+            shapes = newShapes;
+        }
+
+        void handleUserInput(const std::vector<std::string>& args) {
+            for (const Shape& shape : shapes) {
+                if (args[1] == shape.title) {
+                    shape.draw();
+                    return;
+                }
+            }
+
+            help.printHelp("draw", {"frame", "square", "triangle"}, false, "", true);
+        }
+};
 
 
 
@@ -6436,11 +6598,22 @@ void cmd_draw(const std::vector<std::string>& args, Terminal& term) {
     }
 
     Draw draw;
+    drawManager drawMan;
 
-    if (args[1] == "frame") draw.frame();
-    else if (args[1] == "square") draw.square(draw.getIntInput("Enter Size"));
-    else if (args[1] == "triangle") draw.triangle(draw.getIntInput("Enter Size"));
-    else help.printHelp("draw", {"frame", "square", "triangle"}, false, "", true);
+    drawMan.setShapes({
+        {
+            "frame",
+            [&draw] { draw.frame(); }
+        }, {
+            "square", 
+            [&] { draw.handleShape(args, [&draw](int size) { draw.squareFilled(size); }, [&draw](int size) { draw.squareEmpty(size); }); }
+        }, {
+            "triangle",
+            [&] { draw.handleShape(args, [&draw](int size) { draw.triangleFilled(size); }, [&draw](int size) { draw.triangleEmpty(size); }); }
+        }
+    });
+
+    drawMan.handleUserInput(args);
 }
 
 
