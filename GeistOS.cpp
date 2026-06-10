@@ -2099,7 +2099,9 @@ private:
             {
                 {"draw frame"},
                 {"draw square 10"},
-                {"draw triangle 20"}
+                {"draw square filled 10"},
+                {"draw triangle 20"},
+                {"draw triangle filled 20"}
             }
         });
 
