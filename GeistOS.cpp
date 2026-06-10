@@ -969,14 +969,6 @@ public:
         });
     }
 
-    void exampleData(User* user) {
-        addLog("ls", user);
-        addLog("pwd", user);
-        addLog("echo Hello, World!", user);
-        addLog("db query users", user);
-        addLog("sudo rm -rf /", user);
-    }
-
     void getCmdLog() {
         buildColumns();
         calcWidth();
@@ -1181,8 +1173,6 @@ public:
 
             currentUser = &users[username];
             printScreen("Geist OS");
-
-            sysLog.exampleData(currentUser);
 
             std::cout << currentColor + "Welcome, \033[1;32m" << username << "\033[0m!\n\n";
             return true;
@@ -2329,7 +2319,8 @@ private:
                         {"Reworked", reworkColor, "The 'vim' command to now display the command list and the user input at the bottom of the window"},
                         {"Added", addedColor, "The 'draw' command to draw different kind of shapes, for now you can only draw a frame around the terminal window"},
                         {"Reworked", reworkColor, "The 'draw square' command to now print the square in a correct formatted style"},
-                        {"Reworked", reworkColor, "The 'draw' command to now have a dynamic shape drawing algorythm and a new logic of choosing a shape"}
+                        {"Reworked", reworkColor, "The 'draw' command to now have a dynamic shape drawing algorythm and a new logic of choosing a shape"},
+                        {"Reworked", reworkColor, "The shape managing algorythm of the 'draw' command to now print clear Errors"}
                     }
                 }
             }
@@ -6226,12 +6217,31 @@ void cmd_man(const std::vector<std::string>& args, Terminal& term) {
 
 
 
+
+
+
+
+
+struct ShapeArgs {
+    std::string title;
+    int minSize = 0;
+};
+struct ShapeFunc {
+    std::function<void(int)> filled = [](int) {};
+    std::function<void(int)> empty = [](int) {};
+    std::function<void()> standard = []() {};
+};
+struct Shape {
+    ShapeArgs args;
+    ShapeFunc func;
+};
+
 class Draw {
     public: 
         const std::string COLOR_BORDER = getAnsiColor('B');
         const std::string COLOR_LINE   = getAnsiColor('F');
         const std::string COLOR_CMD    = getAnsiColor('7');
-        const std::string COLOR_ERROR  = getAnsiColor('C');
+        const std::string COLOR_ERROR  = getAnsiColor('4');
         const std::string COLOR_OK     = getAnsiColor('A');
         const std::string COLOR_INFO   = getAnsiColor('9');
         const std::string COLOR_DESC   = getAnsiColor('8');
@@ -6276,42 +6286,72 @@ class Draw {
         }
 
         void handleShape(const std::vector<std::string>& args, 
-                        std::function<void(int)> funcFilled, 
-                        std::function<void(int)> funcEmpty) {
-            if (args.size() < 3) {
+                        Shape shape) {
+            std::string underline = "\033[4m";
+            std::string shapeTitle = args[1];
+            if (!shapeTitle.empty())
+                shapeTitle[0] = static_cast<char>(
+                    std::toupper(static_cast<unsigned char>(shapeTitle[0]))
+                );
+
+            if (args.size() < 3 && shape.args.minSize > 0) {
                 help.printHelp("draw " + args[1], {"filled size", "size"}, false, "", true);
                 return;
             }
             
-            if (args[2] == "filled") {
-                if (args.size() < 4) {
-                    help.printHelp("draw " + args[1] + " filled", {"size"}, false, "", true);
+            if (shape.args.minSize > 0) {
+                if (args[2] == "filled") {
+                    if (args.size() < 4) {
+                        help.printHelp("draw " + args[1] + " filled", {"size"}, false, "", true);
+                        return;
+                    } 
+                    
+                    if (!is_number(args[3])) {
+                        std::cout << COLOR_ERROR << "Size of " 
+                                    << COLOR_DESC << shapeTitle 
+                                    << COLOR_ERROR << " can only be a Number that is " 
+                                    << underline << "larger" << COLOR_RESET 
+                                    << COLOR_ERROR << " than " 
+                                    << COLOR_INFO << shape.args.minSize << "\n" << COLOR_RESET;
+                        return;
+                    } else if (std::stoi(args[3]) < shape.args.minSize) {
+                            std::cout << COLOR_ERROR << "Size of " 
+                                    << COLOR_DESC << shapeTitle 
+                                    << COLOR_ERROR << " must be " 
+                                    << underline << "at least" << COLOR_RESET 
+                                    << COLOR_ERROR << " " 
+                                    << COLOR_INFO << shape.args.minSize << "\n" << COLOR_RESET;
+                        return;
+                    } else if (std::stoi(args[3]) >= shape.args.minSize) {
+                        shape.func.filled(std::stoi(args[3]));
+                    } else {
+                        help.printHelp("draw " + args[1] + " filled", {"size"}, false, "", true);
+                        return;
+                    }
+                } else if (!is_number(args[2])) {
+                    std::cout << COLOR_ERROR << "Size of " 
+                                << COLOR_DESC << shapeTitle 
+                                << COLOR_ERROR << " can only be a Number that is " 
+                                << underline << "larger" << COLOR_RESET 
+                                << COLOR_ERROR << " than " 
+                                << COLOR_INFO << shape.args.minSize << "\n" << COLOR_RESET;
                     return;
-                } 
-                
-                if (!is_number(args[3])) {
-                    help.printHelp("draw " + args[1] + " filled", {"size"}, false, "", true);
+                } else if (std::stoi(args[2]) < shape.args.minSize) {
+                    std::cout << COLOR_ERROR << "Size of " 
+                                << COLOR_DESC << shapeTitle 
+                                << COLOR_ERROR << " must be " 
+                                << underline << "at least" << COLOR_RESET 
+                                << COLOR_ERROR << " " 
+                                << COLOR_INFO << shape.args.minSize << "\n" << COLOR_RESET;
                     return;
-                } else if (std::stoi(args[3]) < 6) {
-                    std::cout << COLOR_ERROR << "Size must be at least 6\n" << COLOR_RESET;
-                    return;
-                } else if (std::stoi(args[3]) >= 6) {
-                    funcFilled(std::stoi(args[3]));
+                } else if (std::stoi(args[2]) >= shape.args.minSize) {
+                    shape.func.empty(std::stoi(args[2]));
                 } else {
-                    help.printHelp("draw " + args[1] + " filled", {"size"}, false, "", true);
+                    help.printHelp("draw " + args[1], {"filled size", "size"}, false, "", true);
                     return;
                 }
-            } else if (!is_number(args[2])) {
-                help.printHelp("draw " + args[1], {"filled size", "size"}, false, "", true);
-                return;
-            } else if (std::stoi(args[2]) < 6) {
-                std::cout << COLOR_ERROR << "Size must be at least 6\n" << COLOR_RESET;
-                return;
-            } else if (std::stoi(args[2]) >= 6) {
-                funcEmpty(std::stoi(args[2]));
             } else {
-                help.printHelp("draw " + args[1], {"filled size", "size"}, false, "", true);
-                return;
+                shape.func.standard();
             }
         }
 
@@ -6561,17 +6601,11 @@ class Draw {
         }
 };
 
-
-
-
 class drawManager {
     private: 
-        struct Shape {
-            std::string title;
-            std::function<void()> draw = [] {};
-        };
-
+        Draw draw;
         std::vector<Shape> shapes;
+        
     public: 
         void setShapes(std::vector<Shape> newShapes) {
             shapes = newShapes;
@@ -6579,8 +6613,12 @@ class drawManager {
 
         void handleUserInput(const std::vector<std::string>& args) {
             for (const Shape& shape : shapes) {
-                if (args[1] == shape.title) {
-                    shape.draw();
+                if (args.size() < 2) {
+                    help.printHelp("draw", {"frame", "square", "triangle"}, false, "", true);
+                    return;
+                }
+                if (args[1] == shape.args.title) {
+                    draw.handleShape(args, shape);
                     return;
                 }
             }
@@ -6588,6 +6626,11 @@ class drawManager {
             help.printHelp("draw", {"frame", "square", "triangle"}, false, "", true);
         }
 };
+
+drawManager drawMan;
+
+
+
 
 
 
@@ -6600,18 +6643,27 @@ void cmd_draw(const std::vector<std::string>& args, Terminal& term) {
     }
 
     Draw draw;
-    drawManager drawMan;
 
     drawMan.setShapes({
         {
-            "frame",
-            [&draw] { draw.frame(); }
+            {"frame", 0},
+            {   
+                [&](int MinSize) { (void)MinSize; },
+                [&](int MinSize) { (void)MinSize; }, 
+                [&]() { draw.frame(); }
+            }
         }, {
-            "square", 
-            [&] { draw.handleShape(args, [&draw](int size) { draw.squareFilled(size); }, [&draw](int size) { draw.squareEmpty(size); }); }
+            {"square", 6},
+            {   
+                [&](int MinSize) { draw.squareFilled(MinSize); },
+                [&](int MinSize) { draw.squareEmpty(MinSize); } 
+            }
         }, {
-            "triangle",
-            [&] { draw.handleShape(args, [&draw](int size) { draw.triangleFilled(size); }, [&draw](int size) { draw.triangleEmpty(size); }); }
+            {"triangle", 3},
+            {   
+                [&](int MinSize) { draw.triangleFilled(MinSize); },
+                [&](int MinSize) { draw.triangleEmpty(MinSize); } 
+            }
         }
     });
 
