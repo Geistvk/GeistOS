@@ -402,7 +402,8 @@ private:
     const char COL_SUCCESS = '2';
     const char COL_WARN    = 'E';
     const char COL_TITLE   = '9';
-    const char COL_NAME    = 'B';
+    const char COL_NAME    = '3';
+    const char COL_BORDER  = 'B';
     const char COL_VALUE   = 'F';
     const char COL_HEADER  = '6';
 
@@ -432,20 +433,18 @@ private:
     }
 
     bool compareValues(const std::string& a, const std::string& op, const std::string& b) {
-        // versuche int Vergleich
         try {
             int ai = std::stoi(a);
             int bi = std::stoi(b);
 
-            if (op == "=")  return ai == bi;
+            if (op == "==")  return ai == bi;
             if (op == "!=") return ai != bi;
             if (op == ">")  return ai > bi;
             if (op == "<")  return ai < bi;
             if (op == ">=") return ai >= bi;
             if (op == "<=") return ai <= bi;
         } catch (...) {
-            // fallback string
-            if (op == "=")  return a == b;
+            if (op == "==")  return a == b;
             if (op == "!=") return a != b;
             if (op == ">")  return a > b;
             if (op == "<")  return a < b;
@@ -541,67 +540,110 @@ private:
 
         std::vector<size_t> widths(table.columns.size());
 
-        for (size_t i = 0; i < table.columns.size(); i++) {
+        for (size_t i = 0; i < table.columns.size(); ++i) {
             widths[i] = table.columns[i].size();
         }
 
         for (const auto& row : table.rows) {
-            for (size_t i = 0; i < row.size(); i++) {
+            for (size_t i = 0; i < row.size(); ++i) {
                 widths[i] = std::max(widths[i], row[i].size());
             }
         }
 
-        auto printSeparator = [&]() {
-            std::cout << "+";
-            for (size_t i = 0; i < widths.size(); i++) {
-                std::cout << std::string(widths[i] + 2, '-') << "+";
+        auto repeat = [](const std::string& str, size_t count) {
+            std::string result;
+
+            for (size_t i = 0; i < count; ++i) {
+                result += str;
             }
-            std::cout << "\n";
+
+            return result;
         };
 
-        printSeparator();
+        auto buildLine = [&](const std::string& left,
+                            const std::string& middle,
+                            const std::string& right)
+        {
+            std::string line = getAnsiColor(COL_BORDER);
+            line += left;
 
-        std::cout << "|";
-        for (size_t i = 0; i < table.columns.size(); i++) {
+            for (size_t i = 0; i < widths.size(); ++i) {
+                line += repeat("─", widths[i] + 2);
+                line += (i + 1 < widths.size()) ? middle : right;
+            }
+
+            line += getAnsiColor(COL_RESET);
+            line += "\n";
+
+            return line;
+        };
+
+        std::cout << buildLine("┌", "┬", "┐");
+
+        std::cout << getAnsiColor(COL_BORDER) << "│" << getAnsiColor(COL_RESET);
+
+        for (size_t i = 0; i < table.columns.size(); ++i) {
             std::cout << " "
                     << getAnsiColor(COL_HEADER)
                     << table.columns[i]
                     << getAnsiColor(COL_RESET)
-                    << std::string(widths[i] - table.columns[i].size(), ' ')
-                    << " |";
+                    << repeat(" ", widths[i] - table.columns[i].size())
+                    << " "
+                    << getAnsiColor(COL_BORDER)
+                    << "│"
+                    << getAnsiColor(COL_RESET);
         }
+
         std::cout << "\n";
 
-        printSeparator();
+        std::cout << buildLine("├", "┼", "┤");
 
         if (table.rows.empty()) {
-            std::cout << "| "
+            std::cout << getAnsiColor(COL_BORDER)
+                    << "│ "
                     << getAnsiColor(COL_WARN)
                     << "(no data)"
                     << getAnsiColor(COL_RESET);
 
             size_t totalWidth = 0;
-            for (auto w : widths) totalWidth += w + 3;
-            std::cout << std::string(totalWidth - 9, ' ') << "|\n";
+            for (size_t width : widths) {
+                totalWidth += width + 3;
+            }
 
-            printSeparator();
+            std::cout << repeat(" ", totalWidth - 11)
+                    << getAnsiColor(COL_BORDER)
+                    << "│"
+                    << getAnsiColor(COL_RESET)
+                    << "\n";
+
+            std::cout << buildLine("└", "┴", "┘");
+            std::cout << "\n";
             return;
         }
 
         for (const auto& row : table.rows) {
-            std::cout << "|";
-            for (size_t i = 0; i < row.size(); i++) {
+
+            std::cout << getAnsiColor(COL_BORDER)
+                    << "│"
+                    << getAnsiColor(COL_RESET);
+
+            for (size_t i = 0; i < row.size(); ++i) {
+
                 std::cout << " "
                         << getAnsiColor(COL_VALUE)
                         << row[i]
                         << getAnsiColor(COL_RESET)
-                        << std::string(widths[i] - row[i].size(), ' ')
-                        << " |";
+                        << repeat(" ", widths[i] - row[i].size())
+                        << " "
+                        << getAnsiColor(COL_BORDER)
+                        << "│"
+                        << getAnsiColor(COL_RESET);
             }
+
             std::cout << "\n";
         }
 
-        printSeparator();
+        std::cout << buildLine("└", "┴", "┘");
         std::cout << "\n";
     }
 
@@ -637,7 +679,7 @@ private:
 
 public:
     Condition parseCondition(const std::string& input) {
-        std::vector<std::string> ops = {"<=", ">=", "!=", "=", "<", ">"};
+        std::vector<std::string> ops = {"<=", ">=", "!=", "==", "<", ">"};
 
         for (const auto& op : ops) {
             size_t pos = input.find(op);
@@ -852,11 +894,66 @@ public:
 
 
 class SysLog {
+public: 
+    struct Permissions {
+        bool Read;
+        bool Write;
+        bool Execute;
+        bool Sudo;
+    };
+    struct Data {
+        std::string name;
+        int id;
+        std::string perm;
+    };
+    struct Command {
+        Data data;
+        std::function<std::string(const std::vector<std::string>&, const std::string&)> func;
+        Permissions perm;
+    };
+
+    std::string convertBoolToRights(std::vector<bool> bools) {
+        std::string rights = "";
+
+        for (size_t i = 0; i < bools.size(); i++) {
+            if (bools[i]) rights += "1";
+            else rights += "0";
+        }
+
+        return rights;
+    }
+
+    std::string convertRights(std::string userRightsTmp) {
+        std::string userRights = "";
+        std::string allRights = "rwxs";
+
+        for (int i = 0; i < 4; i++) {
+            if (userRightsTmp[i] == '1') {
+                userRights += allRights[i];
+            } else {
+                userRights += '-';
+            }
+        }
+
+        return userRights;
+    }
+
+    std::string calcOctalValue(std::string rightsTmp) {
+        size_t octalVal = 0;
+
+        for (size_t i = 0; i < rightsTmp.size(); i++) {
+            if (rightsTmp[(rightsTmp.size() - 1) - i] == '1') 
+                octalVal += pow(2, i);
+        }
+
+        return std::to_string(octalVal);
+    }
 private:
     struct LogEntry {
         int id;
         std::string timestamp;
         std::string cmd;
+        Command command;
         User* user;
     };
 
@@ -865,14 +962,17 @@ private:
 
     std::string reset = "\033[0m";
 
-    std::string lineColor = getAnsiColor('7');
-    std::string idColor = getAnsiColor('9');
-    std::string timeColor = getAnsiColor('B');
-    std::string cmdColor = getAnsiColor('A');
-    std::string userColor = getAnsiColor('F');
-    std::string rankColor = getAnsiColor('D');
-    std::string rightsColor = getAnsiColor('E');
-    std::string permColor = getAnsiColor('6');
+    std::string colLogId         = getAnsiColor('3');
+    std::string colTime          = getAnsiColor('8');
+    std::string colUserInput     = getAnsiColor('2');
+    std::string colCmdId         = getAnsiColor('1');
+    std::string colCommandName   = getAnsiColor('9');
+    std::string colUser          = getAnsiColor('B');
+    std::string colRank          = getAnsiColor('5');
+    std::string colRights        = getAnsiColor('6');
+    std::string colPerm          = getAnsiColor('E');
+    std::string colRequired      = getAnsiColor('A');
+    std::string lineColor        = getAnsiColor('7');
 
     struct Column {
         std::string header;
@@ -919,30 +1019,21 @@ private:
         return oss.str();
     }
 
-    std::string convertRights(std::string userRightsTmp) {
-        std::string userRights = "";
-        std::string allRights = "rwxs";
-
-        for (int i = 0; i < 4; i++) {
-            if (userRightsTmp[i] == '1') {
-                userRights += allRights[i];
-            } else {
-                userRights += '-';
-            }
-        }
-
-        return userRights;
-    }
-
     void buildColumns() {
         columns = {
-            { "CmdId",            [&](const LogEntry& log){ return convertInt(log.id); },                     idColor       },
-            { "Time",             [&](const LogEntry& log){ return log.timestamp; },                          timeColor     },
-            { "Command",          [&](const LogEntry& log){ return log.cmd; },                                cmdColor      },
-            { "User",             [&](const LogEntry& log){ return log.user->name; },                         userColor     },
-            { "Rank",             [&](const LogEntry& log){ return log.user->rank; },                         rankColor     },
-            { "Rights",           [&](const LogEntry& log){ return log.user->userRights; },                   rightsColor   },
-            { "Permissions",      [&](const LogEntry& log){ return convertRights(log.user->userRights); },    permColor     }
+            { "LogId",          [&](const LogEntry& log){ return convertInt(log.id); },                     colLogId },
+            { "Time",           [&](const LogEntry& log){ return log.timestamp; },                          colTime },
+            { "User Input",     [&](const LogEntry& log){ return log.cmd; },                                colUserInput },
+            { "CmdId",          [&](const LogEntry& log){ return convertInt(log.command.data.id); },        colCmdId },
+            { "CommandName",    [&](const LogEntry& log){ return log.command.data.name; },                  colCommandName },
+            { "User",           [&](const LogEntry& log){ return log.user->name; },                         colUser },
+            { "Rank",           [&](const LogEntry& log){ return log.user->rank; },                         colRank },
+            { "OctalValue",     [&](const LogEntry& log){ return calcOctalValue(log.user->userRights); },   colRights },
+            { "Rights",         [&](const LogEntry& log){ return log.user->userRights; },                   colRights },
+            { "Permissions",    [&](const LogEntry& log){ return convertRights(log.user->userRights); },    colPerm },
+            { "RequiredOctVal", [&](const LogEntry& log){ return calcOctalValue(log.command.data.perm); },  colRequired },
+            { "RequiredRights", [&](const LogEntry& log){ return log.command.data.perm; },                  colRequired },
+            { "Cmd Permission", [&](const LogEntry& log){ return convertRights(log.command.data.perm); },   colRequired }
         };
     }
 
@@ -960,11 +1051,12 @@ private:
     }
 
 public:
-    void addLog(const std::string& input, User* user) {
+    void addLog(const std::string& input, Command cmd, User* user) {
         logs.push_back({
             nextLogId++,
             getTimeStamp(),
             input,
+            cmd,
             user
         });
     }
@@ -1059,29 +1151,29 @@ SysLog sysLog;
 // ==========================
 class Terminal {
 private:
-    struct Command {
-        std::function<std::string(const std::vector<std::string>&, const std::string&)> func;
-        bool requiresRead;
-        bool requiresWrite;
-        bool requiresExecute;
-        bool requiresSudo;
+    struct Personal {
+        std::string preName;
+        std::string lastName;
+        std::string password;
+        std::string created;
     };
-
-    struct log {
-        int logId;
-        std::string timestamp;
-        std::string cmd;
+    struct userPerm {
+        std::string rank;
+        std::string userRights;
     };
-
+    struct addUser {
+        std::string userName;
+        Personal personal;
+        userPerm userPerm;
+    };
     bool running = true;
-    std::map<std::string, Command> commands;
+    std::map<std::string, SysLog::Command> commands;
 
     std::string error = "none";
     std::unordered_map<std::string, User> users;
     User* currentUser = nullptr;
 
-    std::vector<log> cmdLog = {};
-    int cmdLogId = 1;
+    int cmdId = 1;
 
     std::string standard   = "\033[0m";
     std::string textColor1 = getAnsiColor('1');
@@ -1089,24 +1181,59 @@ private:
     std::string errorColor = getAnsiColor('4');
     std::string accentColor= getAnsiColor('6');
     std::string sudoColor  = getAnsiColor('B');
+
+    std::string btos(bool x) {
+        if (x)
+            return "True";
+        return "False";
+    }
+
+    void initUsers(std::vector<addUser> addUsers) {
+        int userIndex = 0;
+        for (auto user : addUsers) {
+            db.insert("users", {
+                std::to_string(userIndex), 
+                user.personal.preName, 
+                user.personal.lastName, 
+                user.userName, 
+                user.personal.password, 
+                user.personal.created, 
+                user.userPerm.rank, 
+                sysLog.calcOctalValue(user.userPerm.userRights),
+                user.userPerm.userRights,
+                sysLog.convertRights(user.userPerm.userRights)
+            });
+
+            users[user.userName] = {
+                userIndex,
+                user.personal.preName, 
+                user.personal.lastName, 
+                user.userName, 
+                user.personal.password, 
+                user.personal.created, 
+                user.userPerm.rank, 
+                user.userPerm.userRights
+            };
+            userIndex++;
+        }
+    }
+
 public:
     Terminal() {
         SetConsoleOutputCP(CP_UTF8);
         SetConsoleCP(CP_UTF8);
 
-        db.create("users", {"userId", "preName", "lastName", "name", "password", "created", "rank", "userRights"});
+        db.create("users", {"userId", "preName", "lastName", "name", "password", "created", "rank", "OctalValue", "userRights", "userPermission"});
 
-        db.insert("users", {"0", "Root", "Root", "root", "root123", "2024", "Owner", "1111"});
-        db.insert("users", {"1", "User", "User", "user", "user123", "2024", "Member", "1010"});
-        db.insert("users", {"2", "Bot", "Bot", "Bot", "bot123", "2024", "Bot", "0010"});
-        db.insert("users", {"3", "Admin", "Admin", "Admin", "admin123", "2024", "Admin", "1111"});
-        db.insert("users", {"4", "Jonas", "Broschinski", "Jonas", "12345", "2024", "Admin", "1111"});
+        initUsers({
+            {"root",    {"Root", "Root", "root123", "2024"},        {"Owner", "1111"}},
+            {"user",    {"User", "User", "user123", "2024"},        {"Member", "1010"}},
+            {"Bot",     {"Bot", "Bot", "bot123", "2024"},           {"Bot", "0010"}},
+            {"Admin",   {"Admin", "Admin", "admin123", "2024"},     {"Admin", "1111"}},
+            {"Jonas",   {"Jonas", "Broschinski", "12345", "2024"},  {"Admin", "1111"}}
+        });
 
-        users["root"] = {0, "Root", "Root", "root", "root123", "2024", "Owner", "1111"};
-        users["user"] = {1, "User", "User", "user", "user123", "2024", "Member", "1010"};
-        users["Bot"] = {2, "Bot", "Bot", "Bot", "bot123", "2024", "Bot", "0010"};
-        users["Amy"] = {3, "Admin", "Admin", "Admin", "admin123", "2024", "Admin", "1111"};
-        users["Jonas"] = {4, "Jonas", "Broschinski", "Jonas", "12345", "2024", "Admin", "1111"};
+        db.create("commands", {"Name", "CmdId", "ReqRead", "ReqWrite", "ReqExecute", "ReqSudo"});
     }
 
     void registerCommand(const std::string& name,
@@ -1115,7 +1242,33 @@ public:
                          bool requiresWrite = false,
                          bool requiresExecute = false,
                          bool requiresSudo = false) {
-        commands[name] = {func, requiresRead, requiresWrite, requiresExecute, requiresSudo};
+        commands[name] = {
+            {
+                name, 
+                cmdId,
+                sysLog.convertBoolToRights({
+                    requiresRead, 
+                    requiresWrite, 
+                    requiresExecute, 
+                    requiresSudo
+                })
+            }, func, {
+                requiresRead, 
+                requiresWrite, 
+                requiresExecute, 
+                requiresSudo
+            }
+        };
+
+        db.insert("commands", {
+            name, 
+            std::to_string(cmdId), 
+            btos(requiresRead), 
+            btos(requiresWrite), 
+            btos(requiresExecute), 
+            btos(requiresSudo)
+        });
+        cmdId++;
     }
 
     boolean handleRights(std::string userRights, int pos) {
@@ -1232,8 +1385,6 @@ public:
                 std::string pipeInput;
                 bool error = false;
 
-                sysLog.addLog(input, currentUser);
-
                 for (const auto& raw : pipeline)
                 {
                     if (error)
@@ -1269,9 +1420,11 @@ public:
 
                     auto& cmd = it->second;
 
-                    if ((cmd.requiresRead && !handleRights(currentUser->userRights, 0)) ||
-                        (cmd.requiresWrite && !handleRights(currentUser->userRights, 1)) ||
-                        (cmd.requiresExecute && !handleRights(currentUser->userRights, 2)))
+                    sysLog.addLog(input, cmd, currentUser);
+
+                    if ((cmd.perm.Read && !handleRights(currentUser->userRights, 0)) ||
+                        (cmd.perm.Write && !handleRights(currentUser->userRights, 1)) ||
+                        (cmd.perm.Execute && !handleRights(currentUser->userRights, 2)))
                     {
                         std::cout << errorColor << "Permission denied\n";
                         error = true;
@@ -1280,7 +1433,7 @@ public:
 
                     std::string safeInput = pipeInput.substr(0, 10000);
 
-                    if (sudoMode || cmd.requiresSudo)
+                    if (sudoMode || cmd.perm.Sudo)
                     {
                         if (!handleRights(currentUser->userRights, 3)) {
                             std::cout << errorColor << "You have no Sudo Permission\n";
@@ -2320,7 +2473,13 @@ private:
                         {"Added", addedColor, "The 'draw' command to draw different kind of shapes, for now you can only draw a frame around the terminal window"},
                         {"Reworked", reworkColor, "The 'draw square' command to now print the square in a correct formatted style"},
                         {"Reworked", reworkColor, "The 'draw' command to now have a dynamic shape drawing algorythm and a new logic of choosing a shape"},
-                        {"Reworked", reworkColor, "The shape managing algorythm of the 'draw' command to now print clear Errors"}
+                        {"Reworked", reworkColor, "The shape managing algorythm of the 'draw' command to now print clear Errors"},
+                        {"Reworked", reworkColor, "The SysLog Class to now Log more Data about the command you run"},
+                        {"Reworked", reworkColor, "The SysLog Class to now store the logged Data in a vector with clear Struct names"},
+                        {"Reworked", reworkColor, "All the Commands to now have the correct rights asigned needed to run them"},
+                        {"Reworked", reworkColor, "The standard User saving algorythm to now store them in a vector and then initialise them"},
+                        {"Reworked", reworkColor, "The 'db' command to now print using the ASCII Lines in order to print the database border"},
+                        {"Reworked", reworkColor, "The 'db' command to now only accept == as condition and no longer just = as a condition"}
                     }
                 }
             }
@@ -6723,28 +6882,28 @@ private:
                 cmd_help(args);
                 return "";
             }, 
-            {}},
+            {false, false, true, false}},
 
             {"clear", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_clear(args);
                 return "";
             },
-            {}},
+            {false, false, true, false}},
 
             {"echo", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_echo(args);
                 return "";
             }, 
-            {}},
+            {false, false, true, false}},
 
             {"ls", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_ls(args);
                 return "";
             }, 
-            {}},
+            {true, false, true, false}},
 
             {"exit", [this](const auto& args, const std::string& input){
                 (void)args; (void)input;
@@ -6752,7 +6911,7 @@ private:
                 terminal.stop();
                 return "";
             }, 
-            {}},
+            {false, false, true, false}},
 
             {"logout", [this](const auto& args, const std::string& input){
                 (void)args; (void)input;
@@ -6760,7 +6919,7 @@ private:
                 terminal.run();
                 return "";
             }, 
-            {}},
+            {false, false, true, false}},
 
             {"ping", [this](const auto& args, const std::string& input){
                 (void)input;
@@ -6774,56 +6933,56 @@ private:
                 cmd_dir(args);
                 return "";
             }, 
-            {true}},
+            {true, false, true, false}},
 
             {"cd", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_cd(args);
                 return "";
             }, 
-            {true}},
+            {true, false, true, false}},
 
             {"mkdir", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_mkdir(args);
                 return "";
             }, 
-            {false, true}},
+            {false, true, true, false}},
 
             {"rm", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_rm(args);
                 return "";
             }, 
-            {true}},
+            {true, false, true, false}},
 
             {"touch", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_touch(args);
                 return "";
             }, 
-            {true, true}},
+            {true, true, true, false}},
 
             {"vim", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_vim(args);
                 return "";
             }, 
-            {true, true}},
+            {true, true, true, false}},
 
             {"apt", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_apt_install(args);
                 return "";
             }, 
-            {true, true, false, true}},
+            {true, true, true, true}},
 
             {"color", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_color(args);
                 return "";
             }, 
-            {}},
+            {false, false, true, false}},
 
             {"passwd", [this](const auto& args, const std::string& input){
                 (void)input;
@@ -6851,77 +7010,77 @@ private:
                 cmd_print(args, terminal);
                 return "";
             }, 
-            {true, true}},
+            {true, true, true, false}},
 
             {"win", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_win(args, terminal);
                 return "";
             }, 
-            {}},
+            {false, false, true, false}},
 
             {"date", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_date(args, terminal);
                 return "";
             }, 
-            {}},
+            {false, false, true, false}},
 
             {"sys", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_sys(args, terminal);
                 return "";
             }, 
-            {}},
+            {true, false, true, false}},
 
             {"games", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_games(args, terminal);
                 return "";
             }, 
-            {}},
+            {false, false, true, false}},
 
             {"bank", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_bank(args, terminal);
                 return "";
             }, 
-            {}},
+            {false, false, true, false}},
 
             {"graph", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_graph(args, terminal);
                 return "";
             }, 
-            {}},
+            {false, false, true, false}},
 
             {"cat", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_cat(args, terminal);
                 return "";
             }, 
-            {}},
+            {true, false, true, false}},
 
             {"db", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_db(args, terminal);
                 return "";
             }, 
-            {}}, 
+            {false, false, true, false}}, 
 
             {"man", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_man(args, terminal);
                 return "";
             }, 
-            {}},
+            {false, false, true, false}},
 
             {"draw", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_draw(args, terminal);
                 return "";
             }, 
-            {}}
+            {false, false, true, false}}
         };
     }
 };
