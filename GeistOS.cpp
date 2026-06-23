@@ -905,12 +905,23 @@ public:
         std::string name;
         int id;
         std::string perm;
+        std::string octVal;
     };
     struct Command {
         Data data;
         std::function<std::string(const std::vector<std::string>&, const std::string&)> func;
         Permissions perm;
     };
+
+    struct LogEntry {
+        int id;
+        std::string timestamp;
+        std::string cmd;
+        Command command;
+        User* user;
+    };
+
+    std::vector<LogEntry> logs;
 
     std::string convertBoolToRights(std::vector<bool> bools) {
         std::string rights = "";
@@ -949,15 +960,6 @@ public:
         return std::to_string(octalVal);
     }
 private:
-    struct LogEntry {
-        int id;
-        std::string timestamp;
-        std::string cmd;
-        Command command;
-        User* user;
-    };
-
-    std::vector<LogEntry> logs;
     int nextLogId = 1;
 
     std::string reset = "\033[0m";
@@ -1103,7 +1105,7 @@ public:
 
                 std::string val = c.value(log);
 
-                if (c.header == "ID")
+                if (c.header == "ID" || c.header == "LogId")
                     val = padLeft(val, c.width);
                 else
                     val = padRight(val, c.width);
@@ -1134,10 +1136,23 @@ public:
 
 
 
-
 DataBase db;
-
 SysLog sysLog;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -1223,7 +1238,7 @@ public:
         SetConsoleOutputCP(CP_UTF8);
         SetConsoleCP(CP_UTF8);
 
-        db.create("users", {"userId", "preName", "lastName", "name", "password", "created", "rank", "OctalValue", "userRights", "userPermission"});
+        db.create("users", {"UserId", "PreName", "LastName", "UserName", "Password", "Created", "Rank", "OctalValue", "UserRights", "UserPermission"});
 
         initUsers({
             {"root",    {"Root", "Root", "root123", "2024"},        {"Owner", "1111"}},
@@ -1233,7 +1248,7 @@ public:
             {"Jonas",   {"Jonas", "Broschinski", "12345", "2024"},  {"Admin", "1111"}}
         });
 
-        db.create("commands", {"Name", "CmdId", "ReqRead", "ReqWrite", "ReqExecute", "ReqSudo"});
+        db.create("commands", {"Name", "CmdId", "Permission", "OctVal", "ReqRead", "ReqWrite", "ReqExecute", "ReqSudo"});
     }
 
     void registerCommand(const std::string& name,
@@ -1242,16 +1257,18 @@ public:
                          bool requiresWrite = false,
                          bool requiresExecute = false,
                          bool requiresSudo = false) {
+        std::string cmdPerm = sysLog.convertBoolToRights({
+                                        requiresRead, 
+                                        requiresWrite, 
+                                        requiresExecute, 
+                                        requiresSudo
+                                    });
         commands[name] = {
             {
                 name, 
                 cmdId,
-                sysLog.convertBoolToRights({
-                    requiresRead, 
-                    requiresWrite, 
-                    requiresExecute, 
-                    requiresSudo
-                })
+                cmdPerm,
+                sysLog.calcOctalValue(cmdPerm)
             }, func, {
                 requiresRead, 
                 requiresWrite, 
@@ -1263,6 +1280,8 @@ public:
         db.insert("commands", {
             name, 
             std::to_string(cmdId), 
+            cmdPerm,
+            sysLog.calcOctalValue(cmdPerm),
             btos(requiresRead), 
             btos(requiresWrite), 
             btos(requiresExecute), 
@@ -1335,6 +1354,19 @@ public:
         }
     }
 
+    void printPrompt() {
+        std::string prompt;
+        if (currentColor != "\033[0;37m") {
+            prompt = secColor + currentUser->name + "@GeistOS:" + currentDictonary + "$";
+        } else {
+            prompt = "\033[1;32m" + currentUser->name +
+                    "@GeistOS\033[0m:\033[0;34m" +
+                    currentDictonary + "\033[0m$";
+        }
+
+        std::cout << currentColor + prompt;
+    }
+
     void run() {
         std::string input;
 
@@ -1351,16 +1383,7 @@ public:
             {
                 std::this_thread::sleep_for(std::chrono::milliseconds(20));
 
-                std::string prompt;
-                if (currentColor != "\033[0;37m") {
-                    prompt = secColor + currentUser->name + "@GeistOS:" + currentDictonary + "$";
-                } else {
-                    prompt = "\033[1;32m" + currentUser->name +
-                            "@GeistOS\033[0m:\033[0;34m" +
-                            currentDictonary + "\033[0m$";
-                }
-
-                std::cout << currentColor + prompt;
+                printPrompt();
 
                 if (!std::getline(std::cin, input)) {
                     std::cout << errorColor << "\nInput stream closed\n";
@@ -1499,6 +1522,86 @@ public:
         }
     }
 };
+
+
+
+
+
+
+
+
+
+
+
+class System : public Terminal {
+private: 
+    size_t columns;
+    size_t rows;
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+
+    void calcScreenSize() {
+        GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+        columns = csbi.srWindow.Right - csbi.srWindow.Left + 1;
+        rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
+
+        (void)columns;
+    }
+
+public: 
+    void up(int n) {
+        std::cout << "\x1b[" << n << "A"; // Move Up n Lines
+    }
+    void down(int n) {
+        std::cout << "\x1b[" << n << "B"; // Move down n Lines
+    }
+    void right(int n) {
+        std::cout << "\x1b[" << n << "C"; // Move Right n Lines
+    }
+    void left(int n) {
+        std::cout << "\x1b[" << n << "D"; // Move Left n Lines
+    }
+
+    void saveCursorPos() {
+        std::cout << "\x1b[s"; // Save Cursors Position
+    }
+    void restoreCursorPos() {
+        std::cout << "\x1b[u"; // Restore Cursors Position
+    }
+
+    void refreshScreen() {
+        calcScreenSize();
+
+        std::cout << "\x1b[" << rows << "A"; // Move Cursor to Top of Terminal
+    }
+
+    void restoreScreen() {
+        restoreCursorPos();
+        clearScreen();
+    }
+
+    void clearScreen() {
+        calcScreenSize();
+
+        for (size_t i = 0; i < (rows - 1); i++)
+            std::cout << "\n";
+
+        refreshScreen();
+        saveCursorPos();
+    }
+};
+
+
+System sys;
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -2479,7 +2582,8 @@ private:
                         {"Reworked", reworkColor, "All the Commands to now have the correct rights asigned needed to run them"},
                         {"Reworked", reworkColor, "The standard User saving algorythm to now store them in a vector and then initialise them"},
                         {"Reworked", reworkColor, "The 'db' command to now print using the ASCII Lines in order to print the database border"},
-                        {"Reworked", reworkColor, "The 'db' command to now only accept == as condition and no longer just = as a condition"}
+                        {"Reworked", reworkColor, "The 'db' command to now only accept == as condition and no longer just = as a condition"},
+                        {"Reworked", reworkColor, "The clearScreen function to now have its own System Class and to be dynamic"}
                     }
                 }
             }
@@ -2719,7 +2823,7 @@ void cmd_help(const std::vector<std::string>& args) {
 void cmd_clear(const std::vector<std::string>& args) {
     (void)args;
     #if defined(_WIN32)
-        system("cls");
+        sys.clearScreen();
     #else
         system("clear");
     #endif
@@ -3472,7 +3576,7 @@ public:
     }
 
     void drawUI() {
-        system("cls");
+        sys.restoreScreen();
         linesCount = minHeight;
         size_t width = 58;
 
@@ -3544,6 +3648,8 @@ public:
 
     void run() {
         std::string command;
+
+        sys.clearScreen();
 
         while (true) {
             drawUI();
@@ -5221,7 +5327,7 @@ public:
             return;
         }
 
-        system("cls");
+        sys.clearScreen();
 
         int r1 = 0, r2 = 0, r3 = 0;
 
@@ -5430,6 +5536,11 @@ static Casino casino;
 void cmd_games(const std::vector<std::string>& args, Terminal& term) {
     (void)term;
 
+    if (args.size() < 2) {
+        help.printHelp("games", {"casino"}, false, "", true);
+        return;
+    }
+
     if (args[1] == "casino") {
         casino.run();
     }
@@ -5454,21 +5565,13 @@ class TermMenu {
         std::vector<MenuItem> menu;
         std::string title;
 
-        void clearScreen() {
-            #ifdef _WIN32
-                system("cls");
-            #else
-                system("clear");
-            #endif
-        };
-
         void getNext() {
             std::cout << "\n";
             std::cout << currentColor << "Press Enter to Continue ...";
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
             std::cin.get();
 
-            clearScreen();
+            sys.restoreScreen();
         };
 
         void render() {
@@ -5501,7 +5604,7 @@ class TermMenu {
                 std::cin >> choice;
 
                 if (choice == 0) {
-                    clearScreen();
+                    sys.restoreScreen();
                     break;
                 }
 
@@ -5585,22 +5688,16 @@ void cmd_bankOld(const std::vector<std::string>& args, Terminal& term) {
     (void)args;
     (void)term;
 
-    auto clearScreen = []() {
-        #ifdef _WIN32
-            system("cls");
-        #else
-            system("clear");
-        #endif
-    };
-
     auto getNext = [&]() {
         std::cout << "\n";
         std::cout << currentColor << "Press Enter to Continue ...";
         std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
         std::cin.get();
 
-        clearScreen();
+        sys.restoreScreen();
     };
+
+    sys.clearScreen();
 
     while (true) {
         std::vector<MenuItem> menu = {
@@ -5649,7 +5746,7 @@ void cmd_bankOld(const std::vector<std::string>& args, Terminal& term) {
             }
         };
 
-        clearScreen();
+        sys.restoreScreen();
 
         printScreen("Bank");
 
@@ -5665,7 +5762,7 @@ void cmd_bankOld(const std::vector<std::string>& args, Terminal& term) {
         std::cin >> choice;
 
         if (choice == 0) {
-            clearScreen();
+            sys.restoreScreen();
             break;
         }
 
