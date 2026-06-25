@@ -10,6 +10,9 @@
 #include <cctype>
 #include <memory>
 
+#include <stdexcept>
+#include <cctype>
+
 #include <io.h>
 #include <fcntl.h>
 
@@ -1543,8 +1546,6 @@ private:
         GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
         columns = csbi.srWindow.Right - csbi.srWindow.Left + 1;
         rows = csbi.srWindow.Bottom - csbi.srWindow.Top + 1;
-
-        (void)columns;
     }
 
 public: 
@@ -1575,18 +1576,20 @@ public:
     }
 
     void restoreScreen() {
-        restoreCursorPos();
+        up(rows - 1);
         clearScreen();
     }
 
     void clearScreen() {
         calcScreenSize();
 
-        for (size_t i = 0; i < (rows - 1); i++)
+        for (size_t i = 0; i < (rows - 1); i++) {
+            for (size_t u = 0; u < columns; u++)
+                std::cout << " ";
             std::cout << "\n";
+        }
 
         refreshScreen();
-        saveCursorPos();
     }
 };
 
@@ -1934,6 +1937,10 @@ private:
                 {
                     {"cat", {"File Name"}},
                     "Show the content of the File"
+                },
+                {
+                    {"script", {"File Name"}},
+                    "Execute the GeistScript you wrote"
                 }
             }
         });
@@ -2248,6 +2255,18 @@ private:
             },
             {
                 {"cat file.txt"}
+            }
+        });
+
+        manPage.push_back({
+            "script",
+            "Execute the GeistScript you wrote",
+            "script <file>",
+            {
+                {"<file>", "The name of the script file you want to execute"}
+            },
+            {
+                {"script file.txt"}
             }
         });
 
@@ -2576,14 +2595,19 @@ private:
                         {"Added", addedColor, "The 'draw' command to draw different kind of shapes, for now you can only draw a frame around the terminal window"},
                         {"Reworked", reworkColor, "The 'draw square' command to now print the square in a correct formatted style"},
                         {"Reworked", reworkColor, "The 'draw' command to now have a dynamic shape drawing algorythm and a new logic of choosing a shape"},
-                        {"Reworked", reworkColor, "The shape managing algorythm of the 'draw' command to now print clear Errors"},
+                        {"Reworked", reworkColor, "The shape managing algorythm of the 'draw' command to now print clear Errors"}
+                    }
+                }, {
+                    "0.6.9", 
+                    {
                         {"Reworked", reworkColor, "The SysLog Class to now Log more Data about the command you run"},
                         {"Reworked", reworkColor, "The SysLog Class to now store the logged Data in a vector with clear Struct names"},
                         {"Reworked", reworkColor, "All the Commands to now have the correct rights asigned needed to run them"},
                         {"Reworked", reworkColor, "The standard User saving algorythm to now store them in a vector and then initialise them"},
                         {"Reworked", reworkColor, "The 'db' command to now print using the ASCII Lines in order to print the database border"},
                         {"Reworked", reworkColor, "The 'db' command to now only accept == as condition and no longer just = as a condition"},
-                        {"Reworked", reworkColor, "The clearScreen function to now have its own System Class and to be dynamic"}
+                        {"Reworked", reworkColor, "The clearScreen function to now have its own System Class and to be dynamic"},
+                        {"Added", addedColor, "The 'script' command to execute GeistScript Files and view the output in the Terminal"}
                     }
                 }
             }
@@ -5327,7 +5351,7 @@ public:
             return;
         }
 
-        sys.clearScreen();
+        sys.restoreScreen();
 
         int r1 = 0, r2 = 0, r3 = 0;
 
@@ -5596,6 +5620,7 @@ class TermMenu {
 
         void start() {
             while (true) {
+                sys.restoreScreen();
                 render(); 
 
                 std::cout << "Choice: ";
@@ -5604,7 +5629,7 @@ class TermMenu {
                 std::cin >> choice;
 
                 if (choice == 0) {
-                    sys.restoreScreen();
+                    sys.clearScreen();
                     break;
                 }
 
@@ -5762,7 +5787,7 @@ void cmd_bankOld(const std::vector<std::string>& args, Terminal& term) {
         std::cin >> choice;
 
         if (choice == 0) {
-            sys.restoreScreen();
+            sys.clearScreen();
             break;
         }
 
@@ -6932,6 +6957,238 @@ void cmd_draw(const std::vector<std::string>& args, Terminal& term) {
 
 
 
+namespace GeistScript {
+
+    enum TokenType {
+        End, Number, StringLiteral, Identifier,
+        Let, Print, If, Else, While, For, Function, Return,
+        Plus, Minus, Star, Slash,
+        Assign, Equal, NotEqual,
+        Less, Greater, LessEqual, GreaterEqual,
+        LParen, RParen, LBrace, RBrace,
+        Semicolon, Comma,
+        Public, Private, Protected
+    };
+    
+    struct Token {
+        TokenType type;
+        std::string text;
+    };
+    
+    class Lexer {
+        std::string src;
+        size_t pos = 0;
+    public:
+        Lexer(const std::string& s) : src(s) {}
+    
+        Token next() {
+            while (pos < src.size() && std::isspace((unsigned char)src[pos])) pos++;
+    
+            if (pos >= src.size()) return {TokenType::End, ""};
+    
+            char c = src[pos];
+    
+            if (std::isdigit(c)) {
+                std::string n;
+                while (pos < src.size() && std::isdigit((unsigned char)src[pos]))
+                    n += src[pos++];
+                return {TokenType::Number, n};
+            }
+    
+            if (std::isalpha(c) || c == '_') {
+                std::string id;
+                while (pos < src.size() &&
+                    (std::isalnum((unsigned char)src[pos]) || src[pos] == '_'))
+                    id += src[pos++];
+    
+                if (id == "let")      return {TokenType::Let, id};
+                if (id == "print")    return {TokenType::Print, id};
+                if (id == "if")       return {TokenType::If, id};
+                if (id == "else")     return {TokenType::Else, id};
+                if (id == "while")    return {TokenType::While, id};
+                if (id == "for")      return {TokenType::For, id};
+                if (id == "function") return {TokenType::Function, id};
+                if (id == "return")   return {TokenType::Return, id};
+                if (id == "public") return {TokenType::Public, id};
+                if (id == "private") return {TokenType::Private, id};
+                if (id == "protected") return {TokenType::Protected, id};
+    
+                return {TokenType::Identifier, id};
+            }
+    
+            if (c == '"') {
+                pos++;
+                std::string s;
+                while (pos < src.size() && src[pos] != '"')
+                    s += src[pos++];
+                pos++;
+                return {TokenType::StringLiteral, s};
+            }
+    
+            pos++;
+    
+            switch (c) {
+                case '+': return {TokenType::Plus, "+"};
+                case '-': return {TokenType::Minus, "-"};
+                case '*': return {TokenType::Star, "*"};
+                case '/': return {TokenType::Slash, "/"};
+                case '(': return {TokenType::LParen, "("};
+                case ')': return {TokenType::RParen, ")"};
+                case '{': return {TokenType::LBrace, "{"};
+                case '}': return {TokenType::RBrace, "}"};
+                case ';': return {TokenType::Semicolon, ";"};
+                case ',': return {TokenType::Comma, ","};
+                case '=': return {TokenType::Assign, "="};
+            }
+    
+            throw std::runtime_error("Unexpected character");
+        }
+    };
+    
+    struct Value {
+        bool isString = false;
+        long long number = 0;
+        std::string str;
+    
+        static Value fromInt(long long v) {
+            Value x;
+            x.number = v;
+            return x;
+        }
+    
+        static Value fromString(std::string v) {
+            Value x;
+            x.isString = true;
+            x.str = std::move(v);
+            return x;
+        }
+    };
+
+    struct Func {
+        std::string name;
+        std::string access;
+        std::vector<Token> params = {};
+    };
+    
+    class Interpreter {
+        std::unordered_map<std::string, Value> vars;
+        std::unordered_map<std::string, Func> funcs;
+    
+    public:
+        void execute(const std::string& source) {
+            int numLine = 0;
+            Lexer lex(source);
+    
+            while (true) {
+                numLine++;
+                Token t = lex.next();
+                if (t.type == TokenType::End) break;
+    
+                if (t.type == TokenType::Let) {
+                    auto name = lex.next();
+                    lex.next(); // =
+                    auto val = lex.next();
+    
+                    if (val.type == TokenType::Number)
+                        vars[name.text] = Value::fromInt(std::stoll(val.text));
+                    else if (val.type == TokenType::StringLiteral)
+                        vars[name.text] = Value::fromString(val.text);
+    
+                    lex.next(); // ;
+                }
+    
+                else if (t.type == TokenType::Print) {
+                    lex.next(); // (
+                    auto v = lex.next();
+    
+                    if (v.type == TokenType::StringLiteral)
+                        std::cout << v.text;
+                    else if (v.type == TokenType::Number)
+                        std::cout << v.text;
+                    else if (v.type == TokenType::Identifier) {
+                        auto& var = vars[v.text];
+                        if (var.isString) std::cout << var.str;
+                        else std::cout << var.number;
+                    }
+    
+                    lex.next(); // )
+                    lex.next(); // ;
+                    std::cout << "\n";
+                }
+
+                else if (t.type == TokenType::Function) {
+                    auto access = lex.next();
+                    if (access.type != TokenType::Public &&
+                        access.type != TokenType::Private && 
+                        access.type != TokenType::Protected) {
+                            std::cout << "ERROR: Invalid Access Type (Line " << numLine << ")" << "\n";
+                            break;
+                    }
+                    auto name = lex.next();
+                    std::vector<Token> params = {};
+                    lex.next(); // (
+
+                    std::cout << "DEBUGACCESS: " << access.text << "\n";
+                    std::cout << "DEBUGNAME: " << name.text << "\n";
+
+                    Token p = lex.next();
+                    while (p.type != TokenType::RParen) {
+                        Token arg = p;
+                        if (arg.type != TokenType::Comma) {
+                            std::cout << "DEBUGARG: " << arg.text << "\n";
+                            auto param = arg;
+                            params.push_back(param);
+                        }
+                        p = lex.next();
+                    }
+
+                    std::cout << "DEBUG: " << lex.next().text << "\n";
+
+                    funcs[name.text] = {
+                        name.text, 
+                        access.text,
+                        params
+                    };
+
+                    lex.next(); // ;
+                }
+            }
+        }
+    };
+}
+
+
+
+
+void cmd_script(const std::vector<std::string>& args, Terminal& term) {
+    (void) term;
+    if (args.size() > 2) {
+        help.printHelp("script", {"file"}, false, "", true);
+        return;
+    }
+
+    std::string script = R"(
+        let x = 42;
+        let msg = "Hello GeistScript";
+
+        print(msg);
+        print(x);
+        print("Hello World");
+        print(100);
+
+        function public HelloWorld(test, yes);
+    )";
+
+    GeistScript::Interpreter interp;
+    interp.execute(script);
+}
+
+
+
+
+
+
+
 
 
 struct Permissions {
@@ -7175,6 +7432,13 @@ private:
             {"draw", [this](const auto& args, const std::string& input){
                 (void)input;
                 cmd_draw(args, terminal);
+                return "";
+            }, 
+            {false, false, true, false}},
+
+            {"script", [this](const auto& args, const std::string& input){
+                (void)input;
+                cmd_script(args, terminal);
                 return "";
             }, 
             {false, false, true, false}}
