@@ -6965,7 +6965,7 @@ void cmd_draw(const std::vector<std::string>& args, Terminal& term) {
 namespace GeistScript {
 
     enum TokenType {
-        End, Number, StringLiteral, Identifier,
+        End, Empty, Number, StringLiteral, Identifier,
         Let, Const, Print, If, Else, While, For, Function, Return,
         Plus, Minus, Multiply, Divide, Modulo,
         Assign, Equal, NotEqual, String,
@@ -7093,6 +7093,10 @@ namespace GeistScript {
     private:
         std::unordered_map<std::string, Value> vars;
         std::unordered_map<std::string, Func> funcs;
+
+        Token combine(Token token1, Token token2) {
+            return {TokenType::Empty, token1.text + token2.text};
+        }
 
         bool isTokenType(Token token) {
             return (token.type >= TokenType::End && 
@@ -7324,7 +7328,9 @@ namespace GeistScript {
                         Token arg = p;
                         if (arg.type != TokenType::Comma) {
                             //std::cout << "DEBUGARG: " << arg.text << "\n";
-                            if (isTokenType(arg)) {
+                            if (isTokenType(arg) && 
+                                arg.type != TokenType::Number &&
+                                arg.type == TokenType::StringLiteral) {
                                 throwError("Invalid Variable name", arg, numLine);
                                 break;
                             }
@@ -7356,7 +7362,9 @@ namespace GeistScript {
                         std::string varStr = "";
                         long long varNum = 0;
 
-                        if (!isVarName(arg)) {
+                        if (!isVarName(arg) && 
+                            arg.type != TokenType::StringLiteral && 
+                            arg.type != TokenType::Number) {
                             throwError("Unknown Arguments", args[i], numLine);
                             break;
 
@@ -7392,11 +7400,13 @@ namespace GeistScript {
                         isVarName(t)) {
                     std::vector<Token> operations;
                     bool isConst = false;
+                    std::string par = parent;
+                    int lay = Layer;
                     Token name;
                     std::string varStr = "";
                     long long varNum = 0;
 
-                    if (!isVarName(t)) {
+                    if (!isVarName(t) && !isLocalVarName(parent, t)) {
                         if (t.type == TokenType::Const)
                             isConst = true;
                         name = tokens[pos++];
@@ -7404,38 +7414,95 @@ namespace GeistScript {
                             throwError("Invalid Variable name", name, numLine);
                             break;
                         } 
-                    } else if (isVarName(t) && vars[t.text].isConst) {
+                    } else if ((isVarName(t) && vars[t.text].isConst) || 
+                                (isLocalVarName(parent, t) && funcs[parent].localVars[t.text].isConst)) {
                         throwError("Can't change the value of a Const", t, numLine);
                         break;
                     } else {
                         name = t;
+                        if (isVarName(t)) {
+                            par = vars[name.text].parent;
+                            lay = vars[name.text].layer;
+                        } else if (isLocalVarName(parent, t)) {
+                            par = funcs[parent].localVars[t.text].parent;
+                            lay = funcs[parent].localVars[t.text].layer;
+                        }
                     }
 
-                    auto equal = tokens[pos++];
-                    if (equal.type != TokenType::Assign) {
-                        throwError("Unexpected Character", equal, numLine);
+                    Token op = tokens[pos++]; // =
+
+                    if (op.type == TokenType::Assign) {
+                        Token val = tokens[pos++];
+                        while (val.type != TokenType::Semicolon) {
+                            Token operation = val;
+                            if (isVarName(val) || isLocalVarName(parent, val)) {
+                                Value var;
+                                if (isVarName(val))
+                                    var = vars[val.text];
+                                else if (isLocalVarName(parent, val))
+                                    var = funcs[parent].localVars[val.text];
+
+                                if (var.isString) {
+                                    operation = {TokenType::StringLiteral, var.str};
+                                } else {
+                                    operation = {TokenType::Number, std::to_string(var.number)};
+                                }
+                            }
+                            operations.push_back(operation);
+                            val = tokens[pos++];
+                        }
+                        val = handleArithmetic(operations);
+                        pos--;
+        
+                        if (val.type == TokenType::Number)
+                            varNum = std::stoll(val.text);
+                        else if (val.type == TokenType::StringLiteral) 
+                            varStr = val.text;
+
+                    } else if (op.type == TokenType::Plus ||
+                                op.type == TokenType::Minus) {
+                        Token next = tokens[pos++];
+                        if (next.type == op.type) {
+                            Value var;
+                            std::string opName;
+
+                            if (isVarName(t))
+                                var = vars[name.text];
+                            else if (isLocalVarName(parent, t))
+                                var = funcs[parent].localVars[t.text];
+
+                            if (next.type == TokenType::Plus)
+                                opName = "Increment";
+                            else if (next.type == TokenType::Minus)
+                                opName = "Decrement";
+
+                            if (var.isString) {
+                                throwError("Can't " + opName + " Value of a String", name, numLine);
+                                break;
+                            }
+
+                            long long val = var.number;
+                            isConst = var.isConst;
+
+                            if (op.type == TokenType::Plus)
+                                varNum = val++;
+                            else if (op.type == TokenType::Minus)
+                                varNum = val--;
+                        } else {
+                            throwError("Must be the same", combine(op, next), numLine);
+                            break;
+                        }
+                    } else {
+                        throwError("Unexpected Character", op, numLine);
                         break;
                     }
 
-                    auto val = tokens[pos++];
-                    while (val.type != TokenType::Semicolon) {
-                        operations.push_back(val);
-                        val = tokens[pos++];
-                    }
-                    val = handleArithmetic(operations);
-                    pos--;
-    
-                    if (val.type == TokenType::Number)
-                        varNum = std::stoll(val.text);
-                    else if (val.type == TokenType::StringLiteral) 
-                        varStr = val.text;
-
                     vars[name.text] = Value::handleVal(
-                                                parent, 
-                                                layer, 
-                                                isConst, 
-                                                varStr,
-                                                varNum);
+                                                    par, 
+                                                    lay, 
+                                                    isConst, 
+                                                    varStr,
+                                                    varNum);
                         
     
                     Token semi = tokens[pos++];
@@ -7452,7 +7519,29 @@ namespace GeistScript {
                         break;
                     }
 
+                    std::vector<Token> operations;
+
                     auto v = tokens[pos++];
+                    while (v.type != TokenType::RParen) {
+                        Token operation = v;
+                        if (isVarName(v) || isLocalVarName(parent, v)) {
+                            Value var;
+                            if (isVarName(v))
+                                var = vars[v.text];
+                            else if (isLocalVarName(parent, v))
+                                var = funcs[parent].localVars[v.text];
+
+                            if (var.isString) {
+                                operation = {TokenType::StringLiteral, var.str};
+                            } else {
+                                operation = {TokenType::Number, std::to_string(var.number)};
+                            }
+                        }
+                        operations.push_back(operation);
+                        v = tokens[pos++];
+                    }
+                    v = handleArithmetic(operations);
+                    pos--;
     
                     if (v.type == TokenType::StringLiteral)
                         std::cout << v.text;
@@ -7591,24 +7680,28 @@ void cmd_script(const std::vector<std::string>& args, Terminal& term) {
     }
 
     std::string script = R"(
-        const x = 42 * 2 / 5 * 10;
+        const testNum = 50;
+        const x = 10 * 2;
+        let result = x + testNum + 30;
         let msg = "Hello GeistScript";
 
-        print(msg);
-        print(x);
+        result++;
 
-        function testWorld(name) {
-            print(name);
-            print(x);
+        print(msg);
+        print(result);
+
+        function testWorld(name, age) {
+            const userData = name + " " + age;
+            print(name + " " + age);
+            print(userData);
         }
 
         function HelloWorld() {
             const userName = "User";
             let testSuccessfull = "Hello World";
             print(testSuccessfull);
-            print(msg);
 
-            testWorld(userName);
+            testWorld(userName, 25);
 
             function yesNo() {
                 print("YesNo Func Executed");
