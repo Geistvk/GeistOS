@@ -6970,7 +6970,7 @@ namespace GeistScript {
         Plus, Minus, Multiply, Divide, Modulo,
         Assign, Equal, NotEqual, String,
         Less, Greater, LessEqual, GreaterEqual,
-        LParen, RParen, LBrace, RBrace,
+        LParen, RParen, LBrace, RBrace, LBracket, RBracket,
         Semicolon, Comma
     };
     
@@ -7039,6 +7039,8 @@ namespace GeistScript {
                 case ')': return {TokenType::RParen, ")"};
                 case '{': return {TokenType::LBrace, "{"};
                 case '}': return {TokenType::RBrace, "}"};
+                case '[': return {TokenType::LBracket, "["};
+                case ']': return {TokenType::RBracket, "]"};
                 case ';': return {TokenType::Semicolon, ";"};
                 case ',': return {TokenType::Comma, ","};
                 case '=': return {TokenType::Assign, "="};
@@ -7230,7 +7232,7 @@ namespace GeistScript {
                     while (!ops.empty() &&
                         precedence(ops.back().type) >= precedence(t.type)) {
                         if (values.size() < 2)
-                            throw std::runtime_error("Invalid expression.");
+                            throw std::runtime_error("Invalid expression.1");
 
                         Token rhs = values.back();
                         values.pop_back();
@@ -7250,7 +7252,7 @@ namespace GeistScript {
 
             while (!ops.empty()) {
                 if (values.size() < 2)
-                    throw std::runtime_error("Invalid expression.");
+                    return values.back();
 
                 Token rhs = values.back();
                 values.pop_back();
@@ -7268,6 +7270,39 @@ namespace GeistScript {
                 return { End, "" };
 
             return values.back();
+        }
+
+        struct Arithmetic {
+            Token val;
+            size_t newPos;
+        };
+
+        Arithmetic initilaizeArithmetic(std::vector<Token> tokens, size_t pos, std::string parent) {
+            std::vector<Token> operations;
+
+            Token val = tokens[pos++];
+            while (val.type != TokenType::Semicolon) {
+                Token operation = val;
+                if (isVarName(val) || isLocalVarName(parent, val)) {
+                    Value var;
+                    if (isVarName(val))
+                        var = vars[val.text];
+                    else if (isLocalVarName(parent, val))
+                        var = funcs[parent].localVars[val.text];
+
+                    if (var.isString) {
+                        operation = {TokenType::StringLiteral, var.str};
+                    } else {
+                        operation = {TokenType::Number, std::to_string(var.number)};
+                    }
+                }
+                operations.push_back(operation);
+                val = tokens[pos++];
+            }
+            val = handleArithmetic(operations);
+            pos--;
+
+            return {val, pos};
         }
 
     public:
@@ -7316,7 +7351,7 @@ namespace GeistScript {
 
                     Token LParen = tokens[pos++];
                     if (LParen.type != TokenType::LParen) {
-                        throwError("Unexpected Character", LParen, numLine);
+                        throwError("Unexpected Character1", LParen, numLine);
                         break;
                     }
 
@@ -7339,15 +7374,16 @@ namespace GeistScript {
                         p = tokens[pos++];
                     }
                     pos--;
+
                     Token RParen = tokens[pos++]; // )
                     if (RParen.type != TokenType::RParen) {
-                        throwError("Unexpected Character", RParen, numLine);
+                        throwError("Unexpected Character2", RParen, numLine);
                         break;
                     }
 
                     Token semi = tokens[pos++];
                     if (semi.type != TokenType::Semicolon) {
-                        throwError("Unexpected Character", semi, numLine);
+                        throwError("Unexpected Character3", semi, numLine);
                         break;
                     }
 
@@ -7395,10 +7431,23 @@ namespace GeistScript {
                     run(func.body, func.name, newLayer);
                 }
 
+                else if (t.type == TokenType::Divide) {
+                    Token next = tokens[pos++];
+                    if (next.type == t.type) {
+                        int index = 0;
+                        for (Token token : tokens) {
+                            std::cout << "Token " << index << " " << token.text << "\n";
+                            index++;
+                        }
+                    } else {
+                        throwError("Unexpected Character4", combine(t, next), numLine);
+                        break;
+                    }
+                }
+
                 else if (t.type == TokenType::Let || 
                         t.type == TokenType::Const ||
                         isVarName(t)) {
-                    std::vector<Token> operations;
                     bool isConst = false;
                     std::string par = parent;
                     int lay = Layer;
@@ -7432,27 +7481,9 @@ namespace GeistScript {
                     Token op = tokens[pos++]; // =
 
                     if (op.type == TokenType::Assign) {
-                        Token val = tokens[pos++];
-                        while (val.type != TokenType::Semicolon) {
-                            Token operation = val;
-                            if (isVarName(val) || isLocalVarName(parent, val)) {
-                                Value var;
-                                if (isVarName(val))
-                                    var = vars[val.text];
-                                else if (isLocalVarName(parent, val))
-                                    var = funcs[parent].localVars[val.text];
-
-                                if (var.isString) {
-                                    operation = {TokenType::StringLiteral, var.str};
-                                } else {
-                                    operation = {TokenType::Number, std::to_string(var.number)};
-                                }
-                            }
-                            operations.push_back(operation);
-                            val = tokens[pos++];
-                        }
-                        val = handleArithmetic(operations);
-                        pos--;
+                        Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent);
+                        Token val = arithmetic.val;
+                        pos = arithmetic.newPos--;
         
                         if (val.type == TokenType::Number)
                             varNum = std::stoll(val.text);
@@ -7493,7 +7524,7 @@ namespace GeistScript {
                             break;
                         }
                     } else {
-                        throwError("Unexpected Character", op, numLine);
+                        throwError("Unexpected Character5", op, numLine);
                         break;
                     }
 
@@ -7507,7 +7538,7 @@ namespace GeistScript {
     
                     Token semi = tokens[pos++];
                     if (semi.type != TokenType::Semicolon) {
-                        throwError("Unexpected Character", semi, numLine);
+                        throwError("Unexpected Character6", semi, numLine);
                         break;
                     }
                 }
@@ -7515,33 +7546,13 @@ namespace GeistScript {
                 else if (t.type == TokenType::Print) {
                     Token LParen = tokens[pos++]; // (
                     if (LParen.type != TokenType::LParen) {
-                        throwError("Unexpected Character", LParen, numLine);
+                        throwError("Unexpected Character7", LParen, numLine);
                         break;
                     }
 
-                    std::vector<Token> operations;
-
-                    auto v = tokens[pos++];
-                    while (v.type != TokenType::RParen) {
-                        Token operation = v;
-                        if (isVarName(v) || isLocalVarName(parent, v)) {
-                            Value var;
-                            if (isVarName(v))
-                                var = vars[v.text];
-                            else if (isLocalVarName(parent, v))
-                                var = funcs[parent].localVars[v.text];
-
-                            if (var.isString) {
-                                operation = {TokenType::StringLiteral, var.str};
-                            } else {
-                                operation = {TokenType::Number, std::to_string(var.number)};
-                            }
-                        }
-                        operations.push_back(operation);
-                        v = tokens[pos++];
-                    }
-                    v = handleArithmetic(operations);
-                    pos--;
+                    Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent);
+                    Token v = arithmetic.val;
+                    pos = arithmetic.newPos--;
     
                     if (v.type == TokenType::StringLiteral)
                         std::cout << v.text;
@@ -7563,16 +7574,17 @@ namespace GeistScript {
                         if (var.isString) std::cout << var.str;
                         else std::cout << var.number;
                     }
+                    pos--;
     
                     Token RParen = tokens[pos++]; // )
                     if (RParen.type != TokenType::RParen) {
-                        throwError("Unexpected Character", RParen, numLine);
+                        throwError("Unexpected Character8", RParen, numLine);
                         break;
                     }
 
                     Token semi = tokens[pos++]; // ;
                     if (semi.type != TokenType::Semicolon) {
-                        throwError("Unexpected Character", semi, numLine);
+                        throwError("Unexpected Character9", semi, numLine);
                         break;
                     }
                     std::cout << "\n";
@@ -7595,7 +7607,7 @@ namespace GeistScript {
                     //Check if this Function has a (
                     Token LParen = tokens[pos++]; // (
                     if (LParen.type != TokenType::LParen) {
-                        throwError("Unexpected Character", LParen, numLine);
+                        throwError("Unexpected Character10", LParen, numLine);
                         break;
                     }
 
@@ -7620,7 +7632,7 @@ namespace GeistScript {
                     pos--;
                     Token RParen = tokens[pos++]; // )
                     if (RParen.type != TokenType::RParen) {
-                        throwError("Unexpected Character", RParen, numLine);
+                        throwError("Unexpected Character11", RParen, numLine);
                         break;
                     }
 
@@ -7628,7 +7640,7 @@ namespace GeistScript {
                     //Check if Function has a {
                     Token lBrace = tokens[pos++]; // {
                     if (lBrace.type != TokenType::LBrace) {
-                        throwError("Unexpected Character", lBrace, numLine);
+                        throwError("Unexpected Character12", lBrace, numLine);
                         break;
                     }
 
