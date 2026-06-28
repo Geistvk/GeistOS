@@ -2612,7 +2612,9 @@ private:
                         {"Added", addedColor, "let and const Variables in GeistScript"},
                         {"Added", addedColor, "Function support in GeistScript"},
                         {"Added", addedColor, "Parameter support to the functions in GeistScript"},
-                        {"Added", addedColor, "Arithmetic variable Value calculation support in GeistScript"}
+                        {"Added", addedColor, "Arithmetic variable Value calculation support in GeistScript"},
+                        {"Reworked", reworkColor, "The initialisation of the Arithmetic handler Function"},
+                        {"Reworked", reworkColor, "The Error messages shown by the GeistScript Interpreter"}
                     }
                 }
             }
@@ -6968,7 +6970,7 @@ namespace GeistScript {
         End, Empty, Number, StringLiteral, Identifier,
         Let, Const, Print, If, Else, While, For, Function, Return,
         Plus, Minus, Multiply, Divide, Modulo,
-        Assign, Equal, NotEqual, String,
+        Assign, Equal, NotEqual, And, Or, Not, String,
         Less, Greater, LessEqual, GreaterEqual,
         LParen, RParen, LBrace, RBrace, LBracket, RBracket,
         Semicolon, Comma
@@ -7043,8 +7045,59 @@ namespace GeistScript {
                 case ']': return {TokenType::RBracket, "]"};
                 case ';': return {TokenType::Semicolon, ";"};
                 case ',': return {TokenType::Comma, ","};
-                case '=': return {TokenType::Assign, "="};
                 case '"': return {TokenType::String, "\""};
+                case '\n': return {TokenType::Empty, "\n"};
+                case '&':
+                    if (src[pos] == '&')
+                    {
+                        pos++;
+                        return {TokenType::And, "&&"};
+                    }
+                    break;
+
+                case '|':
+                    if (src[pos] == '|')
+                    {
+                        pos++;
+                        return {TokenType::Or, "||"};
+                    }
+                    break;
+
+                case '!':
+                    if (src[pos] == '=')
+                    {
+                        pos++;
+                        return {TokenType::NotEqual, "!="};
+                    }
+
+                    return {TokenType::Not, "!"};
+
+                case '=':
+                    if (src[pos] == '=')
+                    {
+                        pos++;
+                        return {TokenType::Equal, "=="};
+                    }
+
+                    return {TokenType::Assign, "="};
+
+                case '<':
+                    if (src[pos] == '=')
+                    {
+                        pos++;
+                        return {TokenType::LessEqual, "<="};
+                    }
+
+                    return {TokenType::Less, "<"};
+
+                case '>':
+                    if (src[pos] == '=')
+                    {
+                        pos++;
+                        return {TokenType::GreaterEqual, ">="};
+                    }
+
+                    return {TokenType::Greater, ">"};
             }
     
             throw std::runtime_error("Unexpected character");
@@ -7183,7 +7236,7 @@ namespace GeistScript {
                     a = std::stoi(lhs.text);
                     b = std::stoi(rhs.text);
                 } catch (...) {
-                    throw std::runtime_error("Expected number.");
+                    throw std::runtime_error("This operation requires numeric values.");
                 }
 
                 result.type = Number;
@@ -7203,20 +7256,20 @@ namespace GeistScript {
 
                     case Divide:
                         if (b == 0)
-                            throw std::runtime_error("Division by zero.");
+                            throw std::runtime_error("Division by zero is not allowed.");
 
                         result.text = std::to_string(a / b);
                         break;
 
                     case Modulo:
                         if (b == 0)
-                            throw std::runtime_error("Modulo by zero.");
+                            throw std::runtime_error("Modulo by zero is not allowed.");
 
                         result.text = std::to_string(a % b);
                         break;
 
                     default:
-                        throw std::runtime_error("Invalid operator.");
+                        throw std::runtime_error("The operator is not supported.");
                 }
 
                 return result;
@@ -7232,7 +7285,7 @@ namespace GeistScript {
                     while (!ops.empty() &&
                         precedence(ops.back().type) >= precedence(t.type)) {
                         if (values.size() < 2)
-                            throw std::runtime_error("Invalid expression.1");
+                            throw std::runtime_error("The expression is incomplete. An operator is missing one or more operands.");
 
                         Token rhs = values.back();
                         values.pop_back();
@@ -7249,6 +7302,9 @@ namespace GeistScript {
                     ops.push_back(t);
                 }
             }
+
+            if (operations.empty())
+                throw std::runtime_error("The expression is empty.");
 
             while (!ops.empty()) {
                 if (values.size() < 2)
@@ -7305,6 +7361,165 @@ namespace GeistScript {
             return {val, pos};
         }
 
+        Token resolveToken(const Token& t, const std::string& parent) {
+            if (t.type == TokenType::Identifier) {
+
+                if (isVarName(t)) {
+                    auto& var = vars[t.text];
+
+                    if (var.isString)
+                        return {TokenType::StringLiteral, var.str};
+
+                    return {TokenType::Number, std::to_string(var.number)};
+                } else if (isLocalVarName(parent, t)) {
+                    auto& var = funcs[parent].localVars[t.text];
+
+                    if (var.isString)
+                        return {TokenType::StringLiteral, var.str};
+
+                    return {TokenType::Number, std::to_string(var.number)};
+                } else 
+                    throw std::runtime_error("Unknown variable in condition: " + t.text);
+            }
+
+            return t;
+        }
+
+        bool evaluateCondition(std::string parent, std::vector<Token> expr) {
+            for (size_t i = 0; i < expr.size(); i++) {
+                expr[i] = resolveToken(expr[i], parent);
+            }
+
+            while (true) {
+                int begin = -1;
+                int depth = 0;
+                bool found = false;
+
+                for (size_t i = 0; i < expr.size(); i++) {
+                    if (expr[i].type == TokenType::LParen) {
+                        if (depth == 0)
+                            begin = i;
+
+                        depth++;
+                    } 
+                    else if (expr[i].type == TokenType::RParen) {
+                        depth--;
+
+                        if (depth == 0) {
+                            std::vector<Token> inner(
+                                expr.begin() + begin + 1,
+                                expr.begin() + i
+                            );
+
+                            bool value = evaluateCondition(parent, inner);
+
+                            expr.erase(expr.begin() + begin, expr.begin() + i + 1);
+                            expr.insert(expr.begin() + begin, {TokenType::Number, value ? "1" : "0"});
+
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!found)
+                    break;
+            }
+
+            return evaluateFlatCondition(parent, expr);
+        }
+
+        bool evaluateFlatCondition(std::string parent, const std::vector<Token>& expr) {
+            auto toInt = [](const std::string& s) -> int {
+                if (s.empty())
+                    throw std::runtime_error("Empty value in condition");
+
+                for (char c : s)
+                    if (!std::isdigit(c) && c != '-')
+                        throw std::runtime_error("Non-numeric value in condition: " + s);
+
+                return std::stoi(s);
+            };
+
+            if (expr.size() == 1)
+                return toInt(expr[0].text) != 0;
+
+            for (size_t i = 1; i + 1 < expr.size(); i++) {
+                std::vector<int> nums = {0, 0};
+                const Token& op = expr[i];
+
+                (void) nums; (void)parent;
+
+                int left = toInt(expr[i - 1].text);
+                int right = toInt(expr[i + 1].text);
+
+                switch (op.type) {
+                    case TokenType::Equal:          return left == right;
+                    case TokenType::NotEqual:       return left != right;
+                    case TokenType::Less:           return left < right;
+                    case TokenType::Greater:        return left > right;
+                    case TokenType::LessEqual:      return left <= right;
+                    case TokenType::GreaterEqual:   return left >= right;
+                    case TokenType::And:            return left && right;
+                    case TokenType::Or:             return left || right;
+                    default:
+                        break;
+                }
+            }
+
+            throw std::runtime_error("Invalid condition expression.");
+        }
+
+        struct ConditionResult {
+            bool value;
+            size_t newPos;
+        };
+
+        ConditionResult initializeCondition(
+            const std::vector<Token>& tokens,
+            size_t pos,
+            const std::string& parent)
+        {
+            std::vector<Token> expression;
+            int parenDepth = 1;
+
+            while (pos < tokens.size()) {
+                Token t = tokens[pos++];
+
+                if (t.type == TokenType::LParen)
+                    parenDepth++;
+
+                if (t.type == TokenType::RParen) {
+                    parenDepth--;
+
+                    if (parenDepth == 0)
+                        break;
+                }
+
+                if (isVarName(t)) {
+                    auto& var = vars[t.text];
+
+                    if (var.isString)
+                        expression.push_back({TokenType::StringLiteral, var.str});
+                    else
+                        expression.push_back({TokenType::Number, std::to_string(var.number)});
+                } else if (isLocalVarName(parent, t)) {
+                    auto& var = funcs[parent].localVars[t.text];
+
+                    if (var.isString)
+                        expression.push_back({TokenType::StringLiteral, var.str});
+                    else
+                        expression.push_back({TokenType::Number, std::to_string(var.number)});
+                } else {
+                    expression.push_back(t);
+                }
+            }
+
+            bool result = evaluateCondition(parent, expression);
+
+            return { result, pos };
+        }
+
     public:
         void execute(const std::string& source) {
             Lexer lex(source);
@@ -7345,13 +7560,13 @@ namespace GeistScript {
                     std::vector<Token> args;
 
                     if ((func.parent != parent && func.layer > Layer) || func.layer > Layer) {
-                        throwError("Function wasn't declared in this scope", t, numLine);
+                        throwError("This function is not accessible in the current scope.", t, numLine);
                         break;
                     }
 
                     Token LParen = tokens[pos++];
                     if (LParen.type != TokenType::LParen) {
-                        throwError("Unexpected Character1", LParen, numLine);
+                        throwError("Expected '(' after the function name.", LParen, numLine);
                         break;
                     }
 
@@ -7366,7 +7581,7 @@ namespace GeistScript {
                             if (isTokenType(arg) && 
                                 arg.type != TokenType::Number &&
                                 arg.type == TokenType::StringLiteral) {
-                                throwError("Invalid Variable name", arg, numLine);
+                                throwError("The variable name is invalid.", arg, numLine);
                                 break;
                             }
                             args.push_back(arg);
@@ -7377,18 +7592,18 @@ namespace GeistScript {
 
                     Token RParen = tokens[pos++]; // )
                     if (RParen.type != TokenType::RParen) {
-                        throwError("Unexpected Character2", RParen, numLine);
+                        throwError("Expected ')' to close the function arguments.", RParen, numLine);
                         break;
                     }
 
                     Token semi = tokens[pos++];
                     if (semi.type != TokenType::Semicolon) {
-                        throwError("Unexpected Character3", semi, numLine);
+                        throwError("Expected ';' after the function call.", semi, numLine);
                         break;
                     }
 
                     if (args.size() != func.params.size()) {
-                        throwError("Missing Arguments", {TokenType::End, func.name}, numLine);
+                        throwError("The function was called with the wrong number of arguments.", {TokenType::End, func.name}, numLine);
                         break;
                     }
 
@@ -7401,13 +7616,13 @@ namespace GeistScript {
                         if (!isVarName(arg) && 
                             arg.type != TokenType::StringLiteral && 
                             arg.type != TokenType::Number) {
-                            throwError("Unknown Arguments", args[i], numLine);
+                            throwError("One or more arguments are invalid or undefined.", args[i], numLine);
                             break;
 
                         } else if (arg.type == TokenType::Identifier || isVarName(arg)) {
                             auto& var = vars[arg.text];
                             if ((var.parent != parent && var.layer > Layer) || var.layer > Layer) {
-                                throwError("Invalid Variable", arg, numLine);
+                                throwError("This variable is not accessible in the current scope.", arg, numLine);
                                 break;
                             }
                             isConst = var.isConst;
@@ -7439,8 +7654,30 @@ namespace GeistScript {
                             std::cout << "Token " << index << " " << token.text << "\n";
                             index++;
                         }
+                    } else if (next.type == TokenType::Multiply) {
+                        Token comment = tokens[pos++];
+                        while (comment.type != TokenType::Multiply) {
+                            if (comment.type == TokenType::Divide) {
+                                throwError("The block comment was not closed correctly.", comment, numLine);
+                                break;
+                            }
+                            comment = tokens[pos++];
+                        }
+                        pos--;
+
+                        Token star = tokens[pos++];
+                        if (star.type != TokenType::Multiply) {
+                            throwError("Expected '*' before the end of the block comment.", star, numLine);
+                            break;
+                        }
+
+                        Token slash = tokens[pos++];
+                        if (slash.type != TokenType::Divide) {
+                            throwError("Expected '/' to complete the end of the block comment.", slash, numLine);
+                            break;
+                        }
                     } else {
-                        throwError("Unexpected Character4", combine(t, next), numLine);
+                        throwError("Expected '/' for a line comment or '*' for a block comment after '/'.", combine(t, next), numLine);
                         break;
                     }
                 }
@@ -7460,12 +7697,12 @@ namespace GeistScript {
                             isConst = true;
                         name = tokens[pos++];
                         if (isTokenType(name)) {
-                            throwError("Invalid Variable name", name, numLine);
+                            throwError("The variable name is invalid.", name, numLine);
                             break;
                         } 
                     } else if ((isVarName(t) && vars[t.text].isConst) || 
                                 (isLocalVarName(parent, t) && funcs[parent].localVars[t.text].isConst)) {
-                        throwError("Can't change the value of a Const", t, numLine);
+                        throwError("Cannot modify the value of a constant.", t, numLine);
                         break;
                     } else {
                         name = t;
@@ -7496,19 +7733,23 @@ namespace GeistScript {
                         if (next.type == op.type) {
                             Value var;
                             std::string opName;
+                            std::string operation;
 
                             if (isVarName(t))
                                 var = vars[name.text];
                             else if (isLocalVarName(parent, t))
                                 var = funcs[parent].localVars[t.text];
 
-                            if (next.type == TokenType::Plus)
+                            if (next.type == TokenType::Plus) {
                                 opName = "Increment";
-                            else if (next.type == TokenType::Minus)
+                                operation = "++";
+                            } else if (next.type == TokenType::Minus) {
                                 opName = "Decrement";
+                                operation = "--";
+                            }
 
                             if (var.isString) {
-                                throwError("Can't " + opName + " Value of a String", name, numLine);
+                                throwError("Cannot " + opName + " a string value using '" + operation + "'.", name, numLine);
                                 break;
                             }
 
@@ -7516,24 +7757,36 @@ namespace GeistScript {
                             isConst = var.isConst;
 
                             if (op.type == TokenType::Plus)
-                                varNum = val++;
+                                varNum = ++val;
                             else if (op.type == TokenType::Minus)
-                                varNum = val--;
+                                varNum = --val;
                         } else {
-                            throwError("Must be the same", combine(op, next), numLine);
+                            throwError("Expected '++' or '--'. Both operators must match.", combine(op, next), numLine);
                             break;
                         }
                     } else {
-                        throwError("Unexpected Character5", op, numLine);
+                        throwError("Expected '=' or '++' or '--' after the variable name.", op, numLine);
                         break;
                     }
 
-                    vars[name.text] = Value::handleVal(
-                                                    par, 
-                                                    lay, 
-                                                    isConst, 
-                                                    varStr,
-                                                    varNum);
+                    if ((isVarName(name) || !isVarName(name)) && !isLocalVarName(parent, name)) {
+                        vars[name.text] = Value::handleVal(
+                            par,
+                            lay,
+                            isConst,
+                            varStr,
+                            varNum);
+                    } else if (isLocalVarName(parent, name)) {
+                        funcs[parent].localVars[name.text] = Value::handleVal(
+                            par,
+                            lay,
+                            isConst,
+                            varStr,
+                            varNum);
+                    } else {
+                        throwError("This variable couldn't be saved", name, numLine);
+                        break;
+                    }
                         
     
                     Token semi = tokens[pos++];
@@ -7546,7 +7799,7 @@ namespace GeistScript {
                 else if (t.type == TokenType::Print) {
                     Token LParen = tokens[pos++]; // (
                     if (LParen.type != TokenType::LParen) {
-                        throwError("Unexpected Character7", LParen, numLine);
+                        throwError("Expected ';' at the end of the variable statement.", LParen, numLine);
                         break;
                     }
 
@@ -7568,7 +7821,7 @@ namespace GeistScript {
                         }
 
                         if ((var.parent != parent && var.layer > Layer) || var.layer > Layer) {
-                            throwError("Invalid Variable", v, numLine);
+                            throwError("This variable is not accessible in the current scope.", v, numLine);
                             break;
                         }
                         if (var.isString) std::cout << var.str;
@@ -7578,26 +7831,187 @@ namespace GeistScript {
     
                     Token RParen = tokens[pos++]; // )
                     if (RParen.type != TokenType::RParen) {
-                        throwError("Unexpected Character8", RParen, numLine);
+                        throwError("Expected ')' to close the print statement.", RParen, numLine);
                         break;
                     }
 
                     Token semi = tokens[pos++]; // ;
                     if (semi.type != TokenType::Semicolon) {
-                        throwError("Unexpected Character9", semi, numLine);
+                        throwError("Expected ';' after the print statement.", semi, numLine);
                         break;
                     }
                     std::cout << "\n";
+                }
+
+                else if (t.type == TokenType::If) {
+                    Token lp = tokens[pos++];
+                    if (lp.type != TokenType::LParen)
+                        throw std::runtime_error("Expected '('.");
+
+                    auto cond = initializeCondition(tokens, pos, parent);
+                    pos = cond.newPos;
+                    pos--;
+
+                    Token rp = tokens[pos++];
+                    if (rp.type != TokenType::RParen)
+                        throw std::runtime_error("Expected ')'.");
+
+                    Token lb = tokens[pos++];
+                    if (lb.type != TokenType::LBrace)
+                        throw std::runtime_error("Expected '{'.");
+
+                    std::vector<Token> body;
+                    int depth = 1;
+
+                    while (depth) {
+                        Token x = tokens[pos++];
+
+                        if (x.type == TokenType::LBrace)
+                            depth++;
+
+                        if (x.type == TokenType::RBrace)
+                        {
+                            depth--;
+
+                            if (depth == 0)
+                                break;
+                        }
+
+                        body.push_back(x);
+                    }
+
+                    if (cond.value)
+                        executeTokens(body, parent, Layer + 1);
+                }
+
+                else if (t.type == TokenType::While) {
+                    Token lp = tokens[pos++];
+                    if (lp.type != TokenType::LParen)
+                        throw std::runtime_error("Expected '('.");
+
+                    size_t condStart = pos;
+                    (void) condStart;
+                    int depth = 1;
+
+                    std::vector<Token> condExpr;
+
+                    while (pos < tokens.size()) {
+                        Token x = tokens[pos++];
+
+                        if (x.type == TokenType::LParen)
+                            depth++;
+
+                        if (x.type == TokenType::RParen) {
+                            depth--;
+                            if (depth == 0)
+                                break;
+                        }
+
+                        condExpr.push_back(x);
+                    }
+
+                    Token rp = tokens[pos - 1];
+
+                    Token lb = tokens[pos++];
+                    if (lb.type != TokenType::LBrace)
+                        throw std::runtime_error("Expected '{'.");
+
+                    std::vector<Token> body;
+                    int braceDepth = 1;
+
+                    while (pos < tokens.size()) {
+                        Token x = tokens[pos++];
+
+                        if (x.type == TokenType::LBrace)
+                            braceDepth++;
+
+                        if (x.type == TokenType::RBrace) {
+                            braceDepth--;
+                            if (braceDepth == 0)
+                                break;
+                        }
+
+                        body.push_back(x);
+                    }
+
+                    while (true) {
+                        bool cond = evaluateCondition(parent, condExpr);
+
+                        if (!cond)
+                            break;
+
+                        executeTokens(body, parent, Layer + 1);
+                    }
+                }
+
+                else if (t.type == TokenType::For) {
+                    Token lp = tokens[pos++];
+                    if (lp.type != TokenType::LParen)
+                        throw std::runtime_error("Expected '('.");
+
+                    std::vector<Token> init;
+                    std::vector<Token> cond;
+                    std::vector<Token> update;
+                    int part = 0;
+
+                    while (pos < tokens.size()) {
+                        Token x = tokens[pos++];
+
+                        if (x.type == TokenType::RParen)
+                            break;
+
+                        if (x.type == TokenType::Semicolon) {
+                            part++;
+                            continue;
+                        }
+
+                        if (part == 0) init.push_back(x);
+                        else if (part == 1) cond.push_back(x);
+                        else if (part == 2) update.push_back(x);
+                    }
+
+                    if (pos >= tokens.size())
+                        throw std::runtime_error("Unexpected end in for-loop header.");
+
+                    Token lb = tokens[pos++];
+                    if (lb.type != TokenType::LBrace)
+                        throw std::runtime_error("Expected '{'.");
+
+                    std::vector<Token> body;
+                    int depth = 1;
+
+                    while (pos < tokens.size() && depth > 0) {
+                        Token x = tokens[pos++];
+
+                        if (x.type == TokenType::LBrace) depth++;
+                        if (x.type == TokenType::RBrace) depth--;
+
+                        if (depth > 0)
+                            body.push_back(x);
+                    }
+
+                    if (depth != 0)
+                        throw std::runtime_error("Missing closing '}' in for-loop.");
+
+                    executeTokens(init, parent, Layer + 1);
+
+                    while (true) {
+                        if (!evaluateCondition(parent, cond))
+                            break;
+
+                        executeTokens(body, parent, Layer + 1);
+                        executeTokens(update, parent, Layer + 1);
+                    }
                 }
 
                 else if (t.type == TokenType::Function) {
                     //Check if Function Name is valid
                     Token name = tokens[pos++];
                     if (isTokenType(name)) {
-                        throwError("Invalid Function name", name, numLine);
+                        throwError("The function name is invalid.", name, numLine);
                         break;
                     } else if (isFuncName(name)) {
-                        throwError("Function name is already taken", name, numLine);
+                        throwError("A function with this name already exists.", name, numLine);
                         break;
                     }
 
@@ -7607,7 +8021,7 @@ namespace GeistScript {
                     //Check if this Function has a (
                     Token LParen = tokens[pos++]; // (
                     if (LParen.type != TokenType::LParen) {
-                        throwError("Unexpected Character10", LParen, numLine);
+                        throwError("Expected '(' after the function name.", LParen, numLine);
                         break;
                     }
 
@@ -7621,7 +8035,7 @@ namespace GeistScript {
                         if (arg.type != TokenType::Comma) {
                             //std::cout << "DEBUGARG: " << arg.text << "\n";
                             if (isTokenType(arg)) {
-                                throwError("Invalid Variable name", arg, numLine);
+                                throwError("This variable name is invalid", arg, numLine);
                                 break;
                             }
                             auto param = arg;
@@ -7632,7 +8046,7 @@ namespace GeistScript {
                     pos--;
                     Token RParen = tokens[pos++]; // )
                     if (RParen.type != TokenType::RParen) {
-                        throwError("Unexpected Character11", RParen, numLine);
+                        throwError("Expected ')' to close the function parameter list.", RParen, numLine);
                         break;
                     }
 
@@ -7640,7 +8054,7 @@ namespace GeistScript {
                     //Check if Function has a {
                     Token lBrace = tokens[pos++]; // {
                     if (lBrace.type != TokenType::LBrace) {
-                        throwError("Unexpected Character12", lBrace, numLine);
+                        throwError("Expected '{' to begin the function body.", lBrace, numLine);
                         break;
                     }
 
@@ -7674,7 +8088,7 @@ namespace GeistScript {
 
                 else {
                     if (!isTokenType(t))
-                        throwError("Unknown Expression", t, numLine);
+                        throwError("This statement or expression is not recognized.", t, numLine);
                 }
             }
         }
@@ -7693,11 +8107,25 @@ void cmd_script(const std::vector<std::string>& args, Terminal& term) {
 
     std::string script = R"(
         const testNum = 50;
-        const x = 10 * 2;
+        let x = 10 * 2;
         let result = x + testNum + 30;
         let msg = "Hello GeistScript";
 
         result++;
+
+        while (x <= 30) {
+            print("x: " + x);
+            x++;
+        }
+
+        for (let i = 0; i <= 10; i++) {
+            print("i: " + i);
+        }
+
+        /*
+        This is a multiline comment
+        This Text will be ignored by the Interpreter
+        */
 
         print(msg);
         print(result);
