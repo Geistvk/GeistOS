@@ -2614,7 +2614,9 @@ private:
                         {"Added", addedColor, "Parameter support to the functions in GeistScript"},
                         {"Added", addedColor, "Arithmetic variable Value calculation support in GeistScript"},
                         {"Reworked", reworkColor, "The initialisation of the Arithmetic handler Function"},
-                        {"Reworked", reworkColor, "The Error messages shown by the GeistScript Interpreter"}
+                        {"Reworked", reworkColor, "The Error messages shown by the GeistScript Interpreter"},
+                        {"Added", addedColor, "If, While and For Loop support in GeistScript"},
+                        {"Added", addedColor, "Else If and Else support in GeistScript"}
                     }
                 }
             }
@@ -6967,7 +6969,7 @@ void cmd_draw(const std::vector<std::string>& args, Terminal& term) {
 namespace GeistScript {
 
     enum TokenType {
-        End, Empty, Number, StringLiteral, Identifier,
+        End, Empty, NewLine, Number, StringLiteral, Identifier,
         Let, Const, Print, If, Else, While, For, Function, Return,
         Plus, Minus, Multiply, Divide, Modulo,
         Assign, Equal, NotEqual, And, Or, Not, String,
@@ -6988,119 +6990,140 @@ namespace GeistScript {
         Lexer(const std::string& s) : src(s) {}
     
         Token next() {
-            while (pos < src.size() && std::isspace((unsigned char)src[pos])) pos++;
-    
-            if (pos >= src.size()) return {TokenType::End, ""};
-    
-            char c = src[pos];
-    
-            if (std::isdigit(c)) {
-                std::string n;
-                while (pos < src.size() && std::isdigit((unsigned char)src[pos]))
-                    n += src[pos++];
-                return {TokenType::Number, n};
-            }
-    
-            if (std::isalpha(c) || c == '_') {
-                std::string id;
-                while (pos < src.size() &&
-                    (std::isalnum((unsigned char)src[pos]) || src[pos] == '_'))
-                    id += src[pos++];
-    
-                if (id == "let")      return {TokenType::Let, id};
-                if (id == "const")    return {TokenType::Const, id};
-                if (id == "print")    return {TokenType::Print, id};
-                if (id == "if")       return {TokenType::If, id};
-                if (id == "else")     return {TokenType::Else, id};
-                if (id == "while")    return {TokenType::While, id};
-                if (id == "for")      return {TokenType::For, id};
-                if (id == "function") return {TokenType::Function, id};
-                if (id == "return")   return {TokenType::Return, id};
-    
-                return {TokenType::Identifier, id};
-            }
-    
-            if (c == '"') {
+            while (pos < src.size()) {
+
+                while (pos < src.size() && std::isspace((unsigned char)src[pos]))
+                    pos++;
+
+                if (pos >= src.size())
+                    return {TokenType::End, ""};
+
+                char c = src[pos];
+
+                if (c == '/' && pos + 1 < src.size() && src[pos + 1] == '/') {
+                    pos += 2;
+
+                    while (pos < src.size() && src[pos] != '\n')
+                        pos++;
+
+                    continue;
+                }
+
+                if (c == '/' && pos + 1 < src.size() && src[pos + 1] == '*') {
+                    pos += 2;
+
+                    while (pos + 1 < src.size()) {
+                        if (src[pos] == '*' && src[pos + 1] == '/') {
+                            pos += 2;
+                            break;
+                        }
+                        pos++;
+                    }
+
+                    continue;
+                }
+
+                if (std::isdigit(c)) {
+                    std::string n;
+                    while (pos < src.size() && std::isdigit((unsigned char)src[pos]))
+                        n += src[pos++];
+
+                    return {TokenType::Number, n};
+                }
+
+                if (std::isalpha(c) || c == '_') {
+                    std::string id;
+                    while (pos < src.size() &&
+                        (std::isalnum((unsigned char)src[pos]) || src[pos] == '_'))
+                        id += src[pos++];
+
+                    if (id == "let") return {TokenType::Let, id};
+                    if (id == "const") return {TokenType::Const, id};
+                    if (id == "print") return {TokenType::Print, id};
+                    if (id == "if") return {TokenType::If, id};
+                    if (id == "else") return {TokenType::Else, id};
+                    if (id == "while") return {TokenType::While, id};
+                    if (id == "for") return {TokenType::For, id};
+                    if (id == "function") return {TokenType::Function, id};
+                    if (id == "return") return {TokenType::Return, id};
+
+                    return {TokenType::Identifier, id};
+                }
+
+                if (c == '"') {
+                    pos++;
+                    std::string s;
+
+                    while (pos < src.size() && src[pos] != '"')
+                        s += src[pos++];
+
+                    pos++;
+                    return {TokenType::StringLiteral, s};
+                }
+
                 pos++;
-                std::string s;
-                while (pos < src.size() && src[pos] != '"')
-                    s += src[pos++];
-                pos++;
-                return {TokenType::StringLiteral, s};
+
+                switch (c) {
+                    case '+': return {TokenType::Plus, "+"};
+                    case '-': return {TokenType::Minus, "-"};
+                    case '*': return {TokenType::Multiply, "*"};
+                    case '/': return {TokenType::Divide, "/"};
+                    case '%': return {TokenType::Modulo, "%"};
+                    case '(': return {TokenType::LParen, "("};
+                    case ')': return {TokenType::RParen, ")"};
+                    case '{': return {TokenType::LBrace, "{"};
+                    case '}': return {TokenType::RBrace, "}"};
+                    case '[': return {TokenType::LBracket, "["};
+                    case ']': return {TokenType::RBracket, "]"};
+                    case ';': return {TokenType::Semicolon, ";"};
+                    case ',': return {TokenType::Comma, ","};
+
+                    case '!':
+                        if (src[pos] == '=') {
+                            pos++;
+                            return {TokenType::NotEqual, "!="};
+                        }
+                        return {TokenType::Not, "!"};
+
+                    case '=':
+                        if (src[pos] == '=') {
+                            pos++;
+                            return {TokenType::Equal, "=="};
+                        }
+                        return {TokenType::Assign, "="};
+
+                    case '<':
+                        if (src[pos] == '=') {
+                            pos++;
+                            return {TokenType::LessEqual, "<="};
+                        }
+                        return {TokenType::Less, "<"};
+
+                    case '>':
+                        if (src[pos] == '=') {
+                            pos++;
+                            return {TokenType::GreaterEqual, ">="};
+                        }
+                        return {TokenType::Greater, ">"};
+                    case '&':
+                        if (pos < src.size() && src[pos] == '&') {
+                            pos++;
+                            return {TokenType::And, "&&"};
+                        }
+                        throw std::runtime_error("Unexpected character '&'");
+
+                    case '|':
+                        if (pos < src.size() && src[pos] == '|') {
+                            pos++;
+                            return {TokenType::Or, "||"};
+                        }
+                        throw std::runtime_error("Unexpected character '|'");
+                }
+
+                throw std::runtime_error("Unexpected character");
             }
-    
-            pos++;
-    
-            switch (c) {
-                case '+': return {TokenType::Plus, "+"};
-                case '-': return {TokenType::Minus, "-"};
-                case '*': return {TokenType::Multiply, "*"};
-                case '/': return {TokenType::Divide, "/"};
-                case '%': return {TokenType::Modulo, "%"};
-                case '(': return {TokenType::LParen, "("};
-                case ')': return {TokenType::RParen, ")"};
-                case '{': return {TokenType::LBrace, "{"};
-                case '}': return {TokenType::RBrace, "}"};
-                case '[': return {TokenType::LBracket, "["};
-                case ']': return {TokenType::RBracket, "]"};
-                case ';': return {TokenType::Semicolon, ";"};
-                case ',': return {TokenType::Comma, ","};
-                case '"': return {TokenType::String, "\""};
-                case '\n': return {TokenType::Empty, "\n"};
-                case '&':
-                    if (src[pos] == '&')
-                    {
-                        pos++;
-                        return {TokenType::And, "&&"};
-                    }
-                    break;
 
-                case '|':
-                    if (src[pos] == '|')
-                    {
-                        pos++;
-                        return {TokenType::Or, "||"};
-                    }
-                    break;
-
-                case '!':
-                    if (src[pos] == '=')
-                    {
-                        pos++;
-                        return {TokenType::NotEqual, "!="};
-                    }
-
-                    return {TokenType::Not, "!"};
-
-                case '=':
-                    if (src[pos] == '=')
-                    {
-                        pos++;
-                        return {TokenType::Equal, "=="};
-                    }
-
-                    return {TokenType::Assign, "="};
-
-                case '<':
-                    if (src[pos] == '=')
-                    {
-                        pos++;
-                        return {TokenType::LessEqual, "<="};
-                    }
-
-                    return {TokenType::Less, "<"};
-
-                case '>':
-                    if (src[pos] == '=')
-                    {
-                        pos++;
-                        return {TokenType::GreaterEqual, ">="};
-                    }
-
-                    return {TokenType::Greater, ">"};
-            }
-    
-            throw std::runtime_error("Unexpected character");
+            return {TokenType::End, ""};
         }
     };
     
@@ -7142,6 +7165,8 @@ namespace GeistScript {
         std::vector<Token> params;
         std::vector<Token> body;
         std::unordered_map<std::string, Value> localVars = {};
+        bool hasReturned = false;
+        Token returnValue = {TokenType::End, ""};
     };
     
     class Interpreter {
@@ -7187,6 +7212,131 @@ namespace GeistScript {
             return false;
         }
 
+        int executeFunction(
+            Token t, 
+            const int Layer, 
+            std::string parent, 
+            int numLine, 
+            std::vector<Token> tokens,
+            int pos
+        ) {
+            std::function<void(const std::vector<Token>&, std::string, int)> run;
+            run = [&](const std::vector<Token>& toks, std::string p, int l) {
+                executeTokens(toks, p, l);
+            };
+
+            int newLayer = Layer;
+            newLayer++;
+            auto& func = funcs[t.text];
+            func.body.push_back({TokenType::End, ""});
+
+            func.hasReturned = false;
+            func.returnValue = {TokenType::End, ""};
+
+            std::vector<Token> args;
+
+            if ((func.parent != parent && func.layer > Layer) || func.layer > Layer) {
+                throwError("This function is not accessible in the current scope.", t, numLine);
+                return 0;
+            }
+
+            Token LParen = tokens[pos++];
+            if (LParen.type != TokenType::LParen) {
+                throwError("Expected '(' after the function name.", LParen, numLine);
+                return 0;
+            }
+
+            Token p = tokens[pos++];
+            while (p.type != TokenType::LParen &&
+                    p.type != TokenType::RParen &&
+                    p.type != TokenType::LBrace &&
+                    p.type != TokenType::RBrace) {
+                Token arg = p;
+                if (arg.type != TokenType::Comma) {
+                    //std::cout << "DEBUGARG: " << arg.text << "\n";
+                    if (isTokenType(arg) && 
+                        arg.type != TokenType::Number &&
+                        arg.type == TokenType::StringLiteral) {
+                        throwError("The variable name is invalid.", arg, numLine);
+                        break;
+                    }
+                    args.push_back(arg);
+                }
+                p = tokens[pos++];
+            }
+            pos--;
+
+            Token RParen = tokens[pos++]; // )
+            if (RParen.type != TokenType::RParen) {
+                throwError("Expected ')' to close the function arguments.", RParen, numLine);
+                return 0;
+            }
+
+            Token semi = tokens[pos++];
+            if (semi.type != TokenType::Semicolon) {
+                throwError("Expected ';' after the function call.", semi, numLine);
+                return 0;
+            }
+
+            if (args.size() != func.params.size()) {
+                throwError("The function was called with the wrong number of arguments.", {TokenType::End, func.name}, numLine);
+                return 0;
+            }
+
+            for (size_t i = 0; i < args.size(); i++) {
+                Token arg = args[i];
+                bool isConst = false;
+                std::string varStr = "";
+                long long varNum = 0;
+
+                if (!isVarName(arg) && 
+                    arg.type != TokenType::StringLiteral && 
+                    arg.type != TokenType::Number) {
+                    throwError("One or more arguments are invalid or undefined.", args[i], numLine);
+                    break;
+
+                } else if (arg.type == TokenType::Identifier || isVarName(arg)) {
+                    auto& var = vars[arg.text];
+                    if ((var.parent != parent && var.layer > Layer) || var.layer > Layer) {
+                        throwError("This variable is not accessible in the current scope.", arg, numLine);
+                        break;
+                    }
+                    isConst = var.isConst;
+
+                    if (var.isString) varStr = var.str;
+                    else varNum = var.number;
+                } else if (arg.type == TokenType::StringLiteral) {
+                    varStr = arg.text;
+                } else if (arg.type == TokenType::Number) {
+                    varNum = std::stoll(arg.text);
+                }
+
+                func.localVars[func.params[i].text] = Value::handleVal(
+                                                                func.name, 
+                                                                newLayer, 
+                                                                isConst, 
+                                                                varStr, 
+                                                                varNum);
+            }
+
+            run(func.body, func.name, newLayer);
+
+            Token ret = func.returnValue;
+            return pos;
+        }
+
+        Token getReturn(
+            Token t, 
+            const int Layer, 
+            std::string parent, 
+            int numLine, 
+            std::vector<Token> tokens,
+            int pos
+        ) {
+            executeFunction(t, Layer, parent, numLine, tokens, pos);
+            return {TokenType::End, ""};
+        }
+
         void throwError(std::string error, Token token, int numLine) {
             std::string errorMsg = error 
                                 + " '" + token.text
@@ -7197,51 +7347,179 @@ namespace GeistScript {
         }
 
         Token handleArithmetic(const std::vector<Token>& operations) {
-            if (operations.empty())
+            std::vector<Token> input = operations;
+            // Klammern entfernen (wichtig!)
+            while (true)
+            {
+                int depth = 0;
+                bool changed = false;
+
+                for (size_t i = 0; i < input.size(); i++)
+                {
+                    if (input[i].type == TokenType::LParen)
+                    {
+                        depth++;
+                    }
+                    else if (input[i].type == TokenType::RParen)
+                    {
+                        depth--;
+
+                        if (depth == 0)
+                        {
+                            std::vector<Token> inner(
+                                input.begin() + 1,
+                                input.begin() + i
+                            );
+
+                            Token result = handleArithmetic(inner);
+
+                            input.erase(input.begin(), input.begin() + i + 1);
+                            input.insert(input.begin(), result);
+
+                            changed = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!changed)
+                    break;
+            }
+
+            std::vector<Token> expr;
+
+            for (const auto& t : input)
+            {
+                if (t.type == TokenType::LParen || t.type == TokenType::RParen)
+                    continue;
+
+                expr.push_back(t);
+            }
+
+            if (expr.size() == 1)
+                return expr.front();
+
+
+
+            if (expr.empty())
                 return { End, "" };
 
-            if (operations.size() == 1)
-                return operations.front();
+            if (expr.size() == 1)
+                return expr.front();
 
             auto precedence = [](TokenType t) {
                 switch (t) {
                     case Multiply:
                     case Divide:
                     case Modulo:
-                        return 2;
+                        return 3;
 
                     case Plus:
                     case Minus:
+                        return 2;
+
+                    case Less:
+                    case Greater:
+                    case LessEqual:
+                    case GreaterEqual:
+                    case Equal:
+                    case NotEqual:
                         return 1;
 
-                    default:
+                    case And:
                         return 0;
+
+                    case Or:
+                        return 0;
+
+                    default:
+                        return -1;
                 }
             };
 
-            auto apply = [](Token lhs, Token op, Token rhs) {
+            auto apply = [](Token lhs, Token op, Token rhs) -> Token {
                 Token result;
 
+                auto toNumber = [](const Token& t) -> long long {
+                    return std::stoll(t.text);
+                };
+
+                // STRING handling nur bei +
                 if (op.type == Plus &&
-                    (lhs.type == StringLiteral || rhs.type == StringLiteral)) {
-                    result.type = StringLiteral;
-                    result.text = lhs.text + rhs.text;
-                    return result;
+                    (lhs.type == StringLiteral || rhs.type == StringLiteral))
+                {
+                    Token l = lhs;
+                    Token r = rhs;
+
+                    if (l.type != StringLiteral)
+                        l.text = std::to_string(std::stoll(l.text));
+
+                    if (r.type != StringLiteral)
+                        r.text = std::to_string(std::stoll(r.text));
+
+                    return { StringLiteral, l.text + r.text };
                 }
 
-                int a = 0;
-                int b = 0;
+                // BOOL operators
+                if (op.type == Equal ||
+                    op.type == NotEqual ||
+                    op.type == Less ||
+                    op.type == Greater ||
+                    op.type == LessEqual ||
+                    op.type == GreaterEqual)
+                {
+                    long long a = toNumber(lhs);
+                    long long b = toNumber(rhs);
+
+                    bool r = false;
+
+                    switch (op.type)
+                    {
+                        case Equal:        r = (a == b); break;
+                        case NotEqual:     r = (a != b); break;
+                        case Less:         r = (a < b); break;
+                        case Greater:      r = (a > b); break;
+                        case LessEqual:    r = (a <= b); break;
+                        case GreaterEqual: r = (a >= b); break;
+                        default: break;
+                    }
+
+                    return { Number, r ? "1" : "0" };
+                }
+
+                // AND / OR
+                if (op.type == And || op.type == Or)
+                {
+                    long long a = toNumber(lhs);
+                    long long b = toNumber(rhs);
+
+                    bool r = false;
+
+                    if (op.type == And)
+                        r = (a != 0 && b != 0);
+                    else
+                        r = (a != 0 || b != 0);
+
+                    return { Number, r ? "1" : "0" };
+                }
+
+                // Normal math
+                long long a = 0;
+                long long b = 0;
 
                 try {
-                    a = std::stoi(lhs.text);
-                    b = std::stoi(rhs.text);
-                } catch (...) {
+                    a = toNumber(lhs);
+                    b = toNumber(rhs);
+                }
+                catch (...)
+                {
                     throw std::runtime_error("This operation requires numeric values.");
                 }
 
                 result.type = Number;
 
-                switch (op.type) {
+                switch (op.type)
+                {
                     case Plus:
                         result.text = std::to_string(a + b);
                         break;
@@ -7278,46 +7556,51 @@ namespace GeistScript {
             std::vector<Token> values;
             std::vector<Token> ops;
 
-            for (const auto& t : operations) {
+            for (const auto& t : expr) {
                 if (t.type == Number || t.type == StringLiteral) {
                     values.push_back(t);
-                } else {
+                } else if (
+                    t.type == Plus ||
+                    t.type == Minus ||
+                    t.type == Multiply ||
+                    t.type == Divide ||
+                    t.type == Modulo ||
+                    t.type == Equal ||
+                    t.type == NotEqual ||
+                    t.type == Less ||
+                    t.type == Greater ||
+                    t.type == LessEqual ||
+                    t.type == GreaterEqual ||
+                    t.type == And ||
+                    t.type == Or)
+                {
                     while (!ops.empty() &&
-                        precedence(ops.back().type) >= precedence(t.type)) {
-                        if (values.size() < 2)
-                            throw std::runtime_error("The expression is incomplete. An operator is missing one or more operands.");
+                        precedence(ops.back().type) >= precedence(t.type))
+                    {
+                        if (values.size() < 2 || ops.empty())
+                            throw std::runtime_error("Invalid expression structure.");
 
-                        Token rhs = values.back();
-                        values.pop_back();
-
-                        Token lhs = values.back();
-                        values.pop_back();
-
-                        Token op = ops.back();
-                        ops.pop_back();
+                        Token rhs = values.back(); values.pop_back();
+                        Token lhs = values.back(); values.pop_back();
+                        Token op  = ops.back(); ops.pop_back();
 
                         values.push_back(apply(lhs, op, rhs));
                     }
 
                     ops.push_back(t);
+                } else {
+                    throw std::runtime_error("Invalid token in expression: " + t.text);
                 }
             }
 
-            if (operations.empty())
-                throw std::runtime_error("The expression is empty.");
-
-            while (!ops.empty()) {
+            while (!ops.empty())
+            {
                 if (values.size() < 2)
                     return values.back();
 
-                Token rhs = values.back();
-                values.pop_back();
-
-                Token lhs = values.back();
-                values.pop_back();
-
-                Token op = ops.back();
-                ops.pop_back();
+                Token rhs = values.back(); values.pop_back();
+                Token lhs = values.back(); values.pop_back();
+                Token op  = ops.back(); ops.pop_back();
 
                 values.push_back(apply(lhs, op, rhs));
             }
@@ -7386,47 +7669,147 @@ namespace GeistScript {
         }
 
         bool evaluateCondition(std::string parent, std::vector<Token> expr) {
-            for (size_t i = 0; i < expr.size(); i++) {
-                expr[i] = resolveToken(expr[i], parent);
-            }
+            // Variablen auflösen
+            for (Token &t : expr)
+                t = resolveToken(t, parent);
 
-            while (true) {
-                int begin = -1;
+            // Äußere Klammern entfernen
+            while (expr.size() >= 2 &&
+                expr.front().type == TokenType::LParen &&
+                expr.back().type == TokenType::RParen)
+            {
                 int depth = 0;
-                bool found = false;
+                bool remove = true;
 
-                for (size_t i = 0; i < expr.size(); i++) {
-                    if (expr[i].type == TokenType::LParen) {
-                        if (depth == 0)
-                            begin = i;
-
+                for (size_t i = 0; i < expr.size(); i++)
+                {
+                    if (expr[i].type == TokenType::LParen)
                         depth++;
-                    } 
-                    else if (expr[i].type == TokenType::RParen) {
+
+                    if (expr[i].type == TokenType::RParen)
                         depth--;
 
-                        if (depth == 0) {
-                            std::vector<Token> inner(
-                                expr.begin() + begin + 1,
-                                expr.begin() + i
-                            );
-
-                            bool value = evaluateCondition(parent, inner);
-
-                            expr.erase(expr.begin() + begin, expr.begin() + i + 1);
-                            expr.insert(expr.begin() + begin, {TokenType::Number, value ? "1" : "0"});
-
-                            found = true;
-                            break;
-                        }
+                    if (depth == 0 && i != expr.size() - 1)
+                    {
+                        remove = false;
+                        break;
                     }
                 }
 
-                if (!found)
+                if (!remove)
                     break;
+
+                expr.erase(expr.begin());
+                expr.pop_back();
             }
 
-            return evaluateFlatCondition(parent, expr);
+            // OR
+            {
+                int depth = 0;
+
+                for (size_t i = 0; i < expr.size(); i++)
+                {
+                    if (expr[i].type == TokenType::LParen) depth++;
+                    else if (expr[i].type == TokenType::RParen) depth--;
+
+                    if (depth == 0 && expr[i].type == TokenType::Or)
+                    {
+                        std::vector<Token> left(expr.begin(), expr.begin() + i);
+                        std::vector<Token> right(expr.begin() + i + 1, expr.end());
+
+                        return evaluateCondition(parent, left) ||
+                            evaluateCondition(parent, right);
+                    }
+                }
+            }
+
+            // AND
+            {
+                int depth = 0;
+
+                for (size_t i = 0; i < expr.size(); i++)
+                {
+                    if (expr[i].type == TokenType::LParen) depth++;
+                    else if (expr[i].type == TokenType::RParen) depth--;
+
+                    if (depth == 0 && expr[i].type == TokenType::And)
+                    {
+                        std::vector<Token> left(expr.begin(), expr.begin() + i);
+                        std::vector<Token> right(expr.begin() + i + 1, expr.end());
+
+                        return evaluateCondition(parent, left) &&
+                            evaluateCondition(parent, right);
+                    }
+                }
+            }
+
+            // Vergleichsoperator suchen
+            int depth = 0;
+
+            for (size_t i = 0; i < expr.size(); i++)
+            {
+                if (expr[i].type == TokenType::LParen)
+                    depth++;
+
+                else if (expr[i].type == TokenType::RParen)
+                    depth--;
+
+                if (depth != 0)
+                    continue;
+
+                TokenType op = expr[i].type;
+
+                if (op == TokenType::Equal ||
+                    op == TokenType::NotEqual ||
+                    op == TokenType::Less ||
+                    op == TokenType::Greater ||
+                    op == TokenType::LessEqual ||
+                    op == TokenType::GreaterEqual)
+                {
+                    std::vector<Token> left(expr.begin(), expr.begin() + i);
+                    std::vector<Token> right(expr.begin() + i + 1, expr.end());
+
+                    Token lhs = handleArithmetic(left);
+                    Token rhs = handleArithmetic(right);
+
+                    if (lhs.type == TokenType::StringLiteral ||
+                        rhs.type == TokenType::StringLiteral)
+                    {
+                        switch (op)
+                        {
+                            case TokenType::Equal:
+                                return lhs.text == rhs.text;
+
+                            case TokenType::NotEqual:
+                                return lhs.text != rhs.text;
+
+                            default:
+                                throw std::runtime_error("Only == and != are allowed for strings.");
+                        }
+                    }
+
+                    long long a = std::stoll(lhs.text);
+                    long long b = std::stoll(rhs.text);
+
+                    switch (op)
+                    {
+                        case TokenType::Equal:        return a == b;
+                        case TokenType::NotEqual:     return a != b;
+                        case TokenType::Less:         return a < b;
+                        case TokenType::Greater:      return a > b;
+                        case TokenType::LessEqual:    return a <= b;
+                        case TokenType::GreaterEqual: return a >= b;
+                        default: break;
+                    }
+                }
+            }
+
+            Token result = handleArithmetic(expr);
+
+            if (result.type == TokenType::StringLiteral)
+                return !result.text.empty();
+
+            return std::stoll(result.text) != 0;
         }
 
         bool evaluateFlatCondition(std::string parent, const std::vector<Token>& expr) {
@@ -7551,135 +7934,20 @@ namespace GeistScript {
                 if (t.type == TokenType::End)
                     break;
 
+                if (parent != "root" && funcs[parent].hasReturned)
+                    return;
+
                 if (isFuncName(t)) {
-                    int newLayer = Layer;
-                    newLayer++;
-                    auto& func = funcs[t.text];
-                    func.body.push_back({TokenType::End, ""});
-
-                    std::vector<Token> args;
-
-                    if ((func.parent != parent && func.layer > Layer) || func.layer > Layer) {
-                        throwError("This function is not accessible in the current scope.", t, numLine);
-                        break;
-                    }
-
-                    Token LParen = tokens[pos++];
-                    if (LParen.type != TokenType::LParen) {
-                        throwError("Expected '(' after the function name.", LParen, numLine);
-                        break;
-                    }
-
-                    Token p = tokens[pos++];
-                    while (p.type != TokenType::LParen &&
-                            p.type != TokenType::RParen &&
-                            p.type != TokenType::LBrace &&
-                            p.type != TokenType::RBrace) {
-                        Token arg = p;
-                        if (arg.type != TokenType::Comma) {
-                            //std::cout << "DEBUGARG: " << arg.text << "\n";
-                            if (isTokenType(arg) && 
-                                arg.type != TokenType::Number &&
-                                arg.type == TokenType::StringLiteral) {
-                                throwError("The variable name is invalid.", arg, numLine);
-                                break;
-                            }
-                            args.push_back(arg);
-                        }
-                        p = tokens[pos++];
-                    }
-                    pos--;
-
-                    Token RParen = tokens[pos++]; // )
-                    if (RParen.type != TokenType::RParen) {
-                        throwError("Expected ')' to close the function arguments.", RParen, numLine);
-                        break;
-                    }
-
-                    Token semi = tokens[pos++];
-                    if (semi.type != TokenType::Semicolon) {
-                        throwError("Expected ';' after the function call.", semi, numLine);
-                        break;
-                    }
-
-                    if (args.size() != func.params.size()) {
-                        throwError("The function was called with the wrong number of arguments.", {TokenType::End, func.name}, numLine);
-                        break;
-                    }
-
-                    for (size_t i = 0; i < args.size(); i++) {
-                        Token arg = args[i];
-                        bool isConst = false;
-                        std::string varStr = "";
-                        long long varNum = 0;
-
-                        if (!isVarName(arg) && 
-                            arg.type != TokenType::StringLiteral && 
-                            arg.type != TokenType::Number) {
-                            throwError("One or more arguments are invalid or undefined.", args[i], numLine);
-                            break;
-
-                        } else if (arg.type == TokenType::Identifier || isVarName(arg)) {
-                            auto& var = vars[arg.text];
-                            if ((var.parent != parent && var.layer > Layer) || var.layer > Layer) {
-                                throwError("This variable is not accessible in the current scope.", arg, numLine);
-                                break;
-                            }
-                            isConst = var.isConst;
-
-                            if (var.isString) varStr = var.str;
-                            else varNum = var.number;
-                        } else if (arg.type == TokenType::StringLiteral) {
-                            varStr = arg.text;
-                        } else if (arg.type == TokenType::Number) {
-                            varNum = std::stoll(arg.text);
-                        }
-
-                        func.localVars[func.params[i].text] = Value::handleVal(
-                                                                        func.name, 
-                                                                        newLayer, 
-                                                                        isConst, 
-                                                                        varStr, 
-                                                                        varNum);
-                    }
-
-                    run(func.body, func.name, newLayer);
+                    pos = executeFunction(t, Layer, parent, numLine, tokens, pos);
                 }
 
-                else if (t.type == TokenType::Divide) {
-                    Token next = tokens[pos++];
-                    if (next.type == t.type) {
-                        int index = 0;
-                        for (Token token : tokens) {
-                            std::cout << "Token " << index << " " << token.text << "\n";
-                            index++;
-                        }
-                    } else if (next.type == TokenType::Multiply) {
-                        Token comment = tokens[pos++];
-                        while (comment.type != TokenType::Multiply) {
-                            if (comment.type == TokenType::Divide) {
-                                throwError("The block comment was not closed correctly.", comment, numLine);
-                                break;
-                            }
-                            comment = tokens[pos++];
-                        }
-                        pos--;
+                else if (t.type == TokenType::Return) {
+                    Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent);
 
-                        Token star = tokens[pos++];
-                        if (star.type != TokenType::Multiply) {
-                            throwError("Expected '*' before the end of the block comment.", star, numLine);
-                            break;
-                        }
+                    funcs[parent].returnValue = arithmetic.val;
+                    funcs[parent].hasReturned = true;
 
-                        Token slash = tokens[pos++];
-                        if (slash.type != TokenType::Divide) {
-                            throwError("Expected '/' to complete the end of the block comment.", slash, numLine);
-                            break;
-                        }
-                    } else {
-                        throwError("Expected '/' for a line comment or '*' for a block comment after '/'.", combine(t, next), numLine);
-                        break;
-                    }
+                    return;
                 }
 
                 else if (t.type == TokenType::Let || 
@@ -7799,7 +8067,7 @@ namespace GeistScript {
                 else if (t.type == TokenType::Print) {
                     Token LParen = tokens[pos++]; // (
                     if (LParen.type != TokenType::LParen) {
-                        throwError("Expected ';' at the end of the variable statement.", LParen, numLine);
+                        throwError("Expected '(' at the beginning of a print statement.", LParen, numLine);
                         break;
                     }
 
@@ -7818,6 +8086,8 @@ namespace GeistScript {
                         } else if (isLocalVarName(parent, v)) {
                             auto& func = funcs[parent];
                             var = func.localVars[v.text];
+                        } else if (isFuncName(v)) {
+                            auto& func = funcs[v.text];
                         }
 
                         if ((var.parent != parent && var.layer > Layer) || var.layer > Layer) {
@@ -7845,49 +8115,162 @@ namespace GeistScript {
 
                 else if (t.type == TokenType::If) {
                     Token lp = tokens[pos++];
-                    if (lp.type != TokenType::LParen)
-                        throw std::runtime_error("Expected '('.");
+                    if (lp.type != TokenType::LParen) {
+                        throwError("Expected '('.", lp, numLine);
+                        break;
+                    }
 
-                    auto cond = initializeCondition(tokens, pos, parent);
-                    pos = cond.newPos;
-                    pos--;
+                    std::vector<Token> condition;
+                    int parenDepth = 1;
 
-                    Token rp = tokens[pos++];
-                    if (rp.type != TokenType::RParen)
-                        throw std::runtime_error("Expected ')'.");
+                    while (pos < tokens.size() && parenDepth > 0) {
+                        Token tok = tokens[pos++];
 
-                    Token lb = tokens[pos++];
-                    if (lb.type != TokenType::LBrace)
-                        throw std::runtime_error("Expected '{'.");
+                        if (tok.type == TokenType::LParen)
+                            parenDepth++;
 
-                    std::vector<Token> body;
-                    int depth = 1;
+                        if (tok.type == TokenType::RParen) {
+                            parenDepth--;
 
-                    while (depth) {
-                        Token x = tokens[pos++];
-
-                        if (x.type == TokenType::LBrace)
-                            depth++;
-
-                        if (x.type == TokenType::RBrace)
-                        {
-                            depth--;
-
-                            if (depth == 0)
+                            if (parenDepth == 0)
                                 break;
                         }
 
-                        body.push_back(x);
+                        condition.push_back(tok);
                     }
 
-                    if (cond.value)
+                    Token lb = tokens[pos++];
+                    if (lb.type != TokenType::LBrace)
+                        throwError("Expected '{'.", lb, numLine);
+
+                    std::vector<Token> body;
+                    int braceDepth = 1;
+
+                    while (pos < tokens.size() && braceDepth > 0) {
+                        Token tok = tokens[pos++];
+
+                        if (tok.type == TokenType::LBrace)
+                            braceDepth++;
+
+                        if (tok.type == TokenType::RBrace) {
+                            braceDepth--;
+
+                            if (braceDepth == 0)
+                                break;
+                        }
+
+                        body.push_back(tok);
+                    }
+
+                    bool executed = false;
+
+                    if (evaluateCondition(parent, condition)) {
                         executeTokens(body, parent, Layer + 1);
+                        executed = true;
+                    }
+
+                    while (pos < tokens.size()) {
+                        Token next = tokens[pos];
+
+                        if (next.type != TokenType::Else)
+                            break;
+
+                        pos++; // consume 'else'
+
+                        bool isElseIf = false;
+                        (void) isElseIf;
+
+                        if (pos < tokens.size() && tokens[pos].type == TokenType::If) {
+                            isElseIf = true;
+                            pos++; // consume 'if'
+
+                            Token lp2 = tokens[pos++];
+                            if (lp2.type != TokenType::LParen)
+                                throwError("Expected '('.", lp2, numLine);
+
+                            std::vector<Token> cond2;
+                            int depth2 = 1;
+
+                            while (pos < tokens.size() && depth2 > 0) {
+                                Token tok = tokens[pos++];
+
+                                if (tok.type == TokenType::LParen)
+                                    depth2++;
+
+                                if (tok.type == TokenType::RParen) {
+                                    depth2--;
+                                    if (depth2 == 0)
+                                        break;
+                                }
+
+                                cond2.push_back(tok);
+                            }
+
+                            Token lb2 = tokens[pos++];
+                            if (lb2.type != TokenType::LBrace)
+                                throwError("Expected '{'.", lb2, numLine);
+
+                            std::vector<Token> body2;
+                            int brace2 = 1;
+
+                            while (pos < tokens.size() && brace2 > 0) {
+                                Token tok = tokens[pos++];
+
+                                if (tok.type == TokenType::LBrace)
+                                    brace2++;
+
+                                if (tok.type == TokenType::RBrace) {
+                                    brace2--;
+                                    if (brace2 == 0)
+                                        break;
+                                }
+
+                                body2.push_back(tok);
+                            }
+
+                            if (!executed && evaluateCondition(parent, cond2)) {
+                                executeTokens(body2, parent, Layer + 1);
+                                executed = true;
+                            }
+                        }
+                        else {
+                            // ELSE block
+                            Token lb3 = tokens[pos++];
+                            if (lb3.type != TokenType::LBrace)
+                                throwError("Expected '{'.", lb3, numLine);
+
+                            std::vector<Token> body3;
+                            int brace3 = 1;
+
+                            while (pos < tokens.size() && brace3 > 0) {
+                                Token tok = tokens[pos++];
+
+                                if (tok.type == TokenType::LBrace)
+                                    brace3++;
+
+                                if (tok.type == TokenType::RBrace) {
+                                    brace3--;
+                                    if (brace3 == 0)
+                                        break;
+                                }
+
+                                body3.push_back(tok);
+                            }
+
+                            if (!executed) {
+                                executeTokens(body3, parent, Layer + 1);
+                                executed = true;
+                            }
+
+                            break;
+                        }
+                    }
                 }
 
                 else if (t.type == TokenType::While) {
                     Token lp = tokens[pos++];
                     if (lp.type != TokenType::LParen)
-                        throw std::runtime_error("Expected '('.");
+                        throwError("Expected '('.", lp, numLine);
 
                     size_t condStart = pos;
                     (void) condStart;
@@ -7914,7 +8297,7 @@ namespace GeistScript {
 
                     Token lb = tokens[pos++];
                     if (lb.type != TokenType::LBrace)
-                        throw std::runtime_error("Expected '{'.");
+                        throwError("Expected '{'.", lb, numLine);
 
                     std::vector<Token> body;
                     int braceDepth = 1;
@@ -7947,7 +8330,7 @@ namespace GeistScript {
                 else if (t.type == TokenType::For) {
                     Token lp = tokens[pos++];
                     if (lp.type != TokenType::LParen)
-                        throw std::runtime_error("Expected '('.");
+                        throwError("Expected '('.", lp, numLine);
 
                     std::vector<Token> init;
                     std::vector<Token> cond;
@@ -7971,11 +8354,11 @@ namespace GeistScript {
                     }
 
                     if (pos >= tokens.size())
-                        throw std::runtime_error("Unexpected end in for-loop header.");
+                        throwError("Unexpected end in for-loop header.", tokens[pos], numLine);
 
                     Token lb = tokens[pos++];
                     if (lb.type != TokenType::LBrace)
-                        throw std::runtime_error("Expected '{'.");
+                        throwError("Expected '{'.", lb, numLine);
 
                     std::vector<Token> body;
                     int depth = 1;
@@ -7991,14 +8374,20 @@ namespace GeistScript {
                     }
 
                     if (depth != 0)
-                        throw std::runtime_error("Missing closing '}' in for-loop.");
+                        throwError("Missing closing '}' in for-loop.", tokens[pos], numLine);
+
+                    
+                    init.push_back({TokenType::Semicolon, ";"});
+                    init.push_back({TokenType::End, ""});
+
+                    update.push_back({TokenType::Semicolon, ";"});
+                    update.push_back({TokenType::End, ""});
+
+                    body.push_back({TokenType::End, ""});
 
                     executeTokens(init, parent, Layer + 1);
 
-                    while (true) {
-                        if (!evaluateCondition(parent, cond))
-                            break;
-
+                    while (evaluateCondition(parent, cond)) {
                         executeTokens(body, parent, Layer + 1);
                         executeTokens(update, parent, Layer + 1);
                     }
@@ -8114,12 +8503,24 @@ void cmd_script(const std::vector<std::string>& args, Terminal& term) {
         result++;
 
         while (x <= 30) {
-            print("x: " + x);
+            if (x <= 24) {
+                print("x: " + x + " is <= 24");
+            } else if (x > 24 && x <= 27) {
+                print("x: " + x + " is > 24 and <= 27");
+            } else {
+                print("x: " + x + " is > 27");
+            }
             x++;
         }
 
-        for (let i = 0; i <= 10; i++) {
-            print("i: " + i);
+        //This is a single Line Comment
+
+        for (let i = 0; i <= 20; i++) {
+            if (((i + 1) % 2) == 0) {
+                print("i: " + i);
+            } else {
+                print("i is Even");
+            }
         }
 
         /*
@@ -8129,6 +8530,10 @@ void cmd_script(const std::vector<std::string>& args, Terminal& term) {
 
         print(msg);
         print(result);
+
+        function add(a, b) {
+            return a + b;
+        }
 
         function testWorld(name, age) {
             const userData = name + " " + age;
@@ -8149,6 +8554,8 @@ void cmd_script(const std::vector<std::string>& args, Terminal& term) {
 
             yesNo();
         }
+
+        print(add(10, 15));
 
         HelloWorld();
     )";
