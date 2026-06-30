@@ -44,6 +44,74 @@ The result is an environment that remains readable, predictable, and easy to ext
 - Easily extendable commands  
 - No graphical dependencies  
 
+### GeistScript
+  - self-made Programming Language
+  - Build into the GeistOS Terminal
+  - simple to understand Interpreter
+
+Example Geistscript code with all of it's Features. <br>
+This is a simple Example just to show it's capabilities.
+
+```javascript
+const testNum = 50;
+let x = 10 * 2;
+let result = x + testNum + 30;
+let msg = "Hello GeistScript";
+
+result++;
+
+while (x <= 30) {
+    if (x <= 24) {
+        print("x: " + x + " is <= 24");
+    } else if (x > 24 && x <= 27) {
+        print("x: " + x + " is > 24 and <= 27");
+    } else {
+        print("x: " + x + " is > 27");
+    }
+    x++;
+}
+
+//This is a single Line Comment
+
+for (let i = 0; i <= 20; i++) {
+    if (((i + 1) % 2) == 0) {
+        print("i: " + i);
+    } else {
+        print("i is Even");
+    }
+}
+
+/*
+This is a multiline comment
+This Text will be ignored by the Interpreter
+*/
+
+print(msg);
+print(result);
+
+function testWorld(name, age) {
+    const userData = name + " " + age;
+    print(name + " " + age);
+    print(userData);
+}
+
+function HelloWorld() {
+    const userName = "User";
+    let testSuccessfull = "Hello World";
+    print(testSuccessfull);
+
+    testWorld(userName, 25);
+
+    function yesNo() {
+        print("YesNo Func Executed");
+    }
+
+    yesNo();
+}
+
+HelloWorld();
+```
+
 ---
 
 ## Quick Start
