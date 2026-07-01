@@ -7203,6 +7203,25 @@ namespace GeistScript {
             return false;
         }
 
+        Value tokenToValue(Token t) {
+            std::string varStr = "";
+            long long varNum = 0;
+            Value val;
+
+            if (t.type == TokenType::StringLiteral) {
+                varStr = t.text;
+            } else if (t.type == TokenType::Number) {
+                varNum = std::stoll(t.text);
+            } else if (t.type == TokenType::Identifier) {
+                auto& var = vars[t.text];
+                if (var.isString) varStr = var.str;
+                else varNum = var.number;
+            }
+
+            val = Value::handleVal("root", 0, false, varStr, varNum);
+            return val;
+        }
+
         bool isFuncName(Token token) {
             for (auto func : funcs) {
                 if (func.second.name == token.text) {
@@ -7218,7 +7237,9 @@ namespace GeistScript {
             std::string parent, 
             int numLine, 
             std::vector<Token> tokens,
-            int pos
+            int pos,
+            std::string caller = "root",
+            bool isRetCall = false
         ) {
             std::function<void(const std::vector<Token>&, std::string, int)> run;
             run = [&](const std::vector<Token>& toks, std::string p, int l) {
@@ -7273,7 +7294,7 @@ namespace GeistScript {
             }
 
             Token semi = tokens[pos++];
-            if (semi.type != TokenType::Semicolon) {
+            if (semi.type != TokenType::Semicolon && !isRetCall && caller == "print") {
                 throwError("Expected ';' after the function call.", semi, numLine);
                 return 0;
             }
@@ -7325,16 +7346,36 @@ namespace GeistScript {
             return pos;
         }
 
-        Token getReturn(
+        struct Arithmetic {
+            Token val;
+            size_t newPos;
+        };
+
+        Arithmetic getReturn(
             Token t, 
             const int Layer, 
             std::string parent, 
             int numLine, 
             std::vector<Token> tokens,
-            int pos
+            int pos,
+            std::string caller = "root",
+            bool isRetCall = false
         ) {
-            executeFunction(t, Layer, parent, numLine, tokens, pos);
-            return {TokenType::End, ""};
+            size_t newPos = pos;
+            if (isFuncName(t)) {
+                newPos = executeFunction(t, Layer, parent, numLine, tokens, pos, caller, isRetCall);
+
+                auto& func = funcs[t.text];
+                if (func.hasReturned) {
+                    return {func.returnValue, newPos};
+                } else {
+                    throwError("The function has not returned a value yet.", t, numLine);
+                    return {Token{TokenType::End, ""}, newPos};
+                }
+            } else {
+                throwError("The function does not exist or is not accessible in the current scope.", t, numLine);
+                return {Token{TokenType::End, ""}, newPos};
+            }
         }
 
         void throwError(std::string error, Token token, int numLine) {
@@ -7348,7 +7389,7 @@ namespace GeistScript {
 
         Token handleArithmetic(const std::vector<Token>& operations) {
             std::vector<Token> input = operations;
-            // Klammern entfernen (wichtig!)
+            
             while (true)
             {
                 int depth = 0;
@@ -7611,23 +7652,24 @@ namespace GeistScript {
             return values.back();
         }
 
-        struct Arithmetic {
-            Token val;
-            size_t newPos;
-        };
-
-        Arithmetic initilaizeArithmetic(std::vector<Token> tokens, size_t pos, std::string parent) {
+        Arithmetic initilaizeArithmetic(std::vector<Token> tokens, size_t pos, std::string parent, int Layer, int numLine) {
             std::vector<Token> operations;
 
             Token val = tokens[pos++];
             while (val.type != TokenType::Semicolon) {
                 Token operation = val;
-                if (isVarName(val) || isLocalVarName(parent, val)) {
+                if (isVarName(val) || isLocalVarName(parent, val) || isFuncName(val)) {
                     Value var;
                     if (isVarName(val))
                         var = vars[val.text];
                     else if (isLocalVarName(parent, val))
                         var = funcs[parent].localVars[val.text];
+                    else if (isFuncName(val)) {
+                        Arithmetic ret = getReturn(val, Layer, parent, numLine, tokens, pos, "arithmetic", true);
+                        var = tokenToValue(ret.val);
+                        pos = ret.newPos;
+                        pos--;
+                    }
 
                     if (var.isString) {
                         operation = {TokenType::StringLiteral, var.str};
@@ -7942,7 +7984,7 @@ namespace GeistScript {
                 }
 
                 else if (t.type == TokenType::Return) {
-                    Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent);
+                    Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent, layer, numLine);
 
                     funcs[parent].returnValue = arithmetic.val;
                     funcs[parent].hasReturned = true;
@@ -7986,7 +8028,7 @@ namespace GeistScript {
                     Token op = tokens[pos++]; // =
 
                     if (op.type == TokenType::Assign) {
-                        Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent);
+                        Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent, Layer, numLine);
                         Token val = arithmetic.val;
                         pos = arithmetic.newPos--;
         
@@ -8071,7 +8113,7 @@ namespace GeistScript {
                         break;
                     }
 
-                    Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent);
+                    Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent, Layer, numLine);
                     Token v = arithmetic.val;
                     pos = arithmetic.newPos--;
     
@@ -8087,7 +8129,9 @@ namespace GeistScript {
                             auto& func = funcs[parent];
                             var = func.localVars[v.text];
                         } else if (isFuncName(v)) {
-                            auto& func = funcs[v.text];
+                            Arithmetic ret = getReturn(v, Layer, parent, numLine, tokens, pos, "print", true);
+                            var = tokenToValue(ret.val);
+                            pos = ret.newPos;
                         }
 
                         if ((var.parent != parent && var.layer > Layer) || var.layer > Layer) {
@@ -8555,7 +8599,9 @@ void cmd_script(const std::vector<std::string>& args, Terminal& term) {
             yesNo();
         }
 
-        print(add(10, 15));
+        const sum = add(5, 10);
+        print(sum);         //This is the same
+        print(add(5, 10));  //This is the same
 
         HelloWorld();
     )";
