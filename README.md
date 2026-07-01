@@ -89,6 +89,10 @@ This Text will be ignored by the Interpreter
 print(msg);
 print(result);
 
+function add(a, b) {
+     return a + b;
+}
+
 function testWorld(name, age) {
     const userData = name + " " + age;
     print(name + " " + age);
@@ -108,6 +112,10 @@ function HelloWorld() {
 
     yesNo();
 }
+
+const sum = add(5, 10);
+print(sum);         //This is the same
+print(add(5, 10));  //This is the same
 
 HelloWorld();
 ```
