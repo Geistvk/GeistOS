@@ -137,11 +137,12 @@ g++ GeistOS.cpp
 ```
 GeistOS/
 │
-├── UIElements         # GUI framework
-├── include.zip        # all Dependencies
-├── VariadicTable.h    # lib for Ascii Tables
-├── lib.cpp            # lib for large Ascii
-└── GeistOS.cpp        # entry point
+├── UIElements              # GUI framework
+├── include.zip             # all Dependencies
+├── VariadicTable.h         # lib for Ascii Tables
+├── lib.cpp                 # lib for large Ascii
+├── exampleGeistScript.txt  # example GeistScript code
+└── GeistOS.cpp             # entry point
 ```
 
 ## Expandability
