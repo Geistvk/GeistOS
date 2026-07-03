@@ -2616,7 +2616,9 @@ private:
                         {"Reworked", reworkColor, "The initialisation of the Arithmetic handler Function"},
                         {"Reworked", reworkColor, "The Error messages shown by the GeistScript Interpreter"},
                         {"Added", addedColor, "If, While and For Loop support in GeistScript"},
-                        {"Added", addedColor, "Else If and Else support in GeistScript"}
+                        {"Added", addedColor, "Else If and Else support in GeistScript"},
+                        {"Added", addedColor, "Short form Arithmetics such as +=, -=, *=, /= and %="},
+                        {"Reworked", reworkColor, "The script command to now only take .gsScript files as an input"}
                     }
                 }
             }
@@ -7064,20 +7066,19 @@ namespace GeistScript {
                 pos++;
 
                 switch (c) {
-                    case '+': return {TokenType::Plus, "+"};
-                    case '-': return {TokenType::Minus, "-"};
-                    case '*': return {TokenType::Multiply, "*"};
-                    case '/': return {TokenType::Divide, "/"};
-                    case '%': return {TokenType::Modulo, "%"};
-                    case '(': return {TokenType::LParen, "("};
-                    case ')': return {TokenType::RParen, ")"};
-                    case '{': return {TokenType::LBrace, "{"};
-                    case '}': return {TokenType::RBrace, "}"};
-                    case '[': return {TokenType::LBracket, "["};
-                    case ']': return {TokenType::RBracket, "]"};
-                    case ';': return {TokenType::Semicolon, ";"};
-                    case ',': return {TokenType::Comma, ","};
-
+                    case '+':   return {TokenType::Plus, "+"};
+                    case '-':   return {TokenType::Minus, "-"};
+                    case '*':   return {TokenType::Multiply, "*"};
+                    case '/':   return {TokenType::Divide, "/"};
+                    case '%':   return {TokenType::Modulo, "%"};
+                    case '(':   return {TokenType::LParen, "("};
+                    case ')':   return {TokenType::RParen, ")"};
+                    case '{':   return {TokenType::LBrace, "{"};
+                    case '}':   return {TokenType::RBrace, "}"};
+                    case '[':   return {TokenType::LBracket, "["};
+                    case ']':   return {TokenType::RBracket, "]"};
+                    case ';':   return {TokenType::Semicolon, ";"};
+                    case ',':   return {TokenType::Comma, ","};
                     case '!':
                         if (src[pos] == '=') {
                             pos++;
@@ -7120,7 +7121,7 @@ namespace GeistScript {
                         throw std::runtime_error("Unexpected character '|'");
                 }
 
-                throw std::runtime_error("Unexpected character");
+                throw std::runtime_error("Unexpected character: " + c);
             }
 
             return {TokenType::End, ""};
@@ -8037,6 +8038,23 @@ namespace GeistScript {
                         else if (val.type == TokenType::StringLiteral) 
                             varStr = val.text;
 
+                    } else if (op.type == TokenType::And || op.type == TokenType::Or ||
+                               op.type == TokenType::Equal || op.type == TokenType::NotEqual ||
+                               op.type == TokenType::Less || op.type == TokenType::Greater ||
+                               op.type == TokenType::LessEqual || op.type == TokenType::GreaterEqual) {
+                        std::vector<Token> condition;
+                        condition.push_back(name);
+                        condition.push_back(op);
+
+                        while (pos < tokens.size()) {
+                            Token next = tokens[pos++];
+                            if (next.type == TokenType::Semicolon)
+                                break;
+                            condition.push_back(next);
+                        }
+
+                        bool result = evaluateCondition(parent, condition);
+                        varStr = result ? "True" : "False";
                     } else if (op.type == TokenType::Plus ||
                                 op.type == TokenType::Minus) {
                         Token next = tokens[pos++];
@@ -8073,6 +8091,55 @@ namespace GeistScript {
                         } else {
                             throwError("Expected '++' or '--'. Both operators must match.", combine(op, next), numLine);
                             break;
+                        }
+                    } else if ( op.type == TokenType::Plus || 
+                                op.type == TokenType::Minus ||
+                                op.type == TokenType::Multiply || 
+                                op.type == TokenType::Divide ||
+                                op.type == TokenType::Modulo) {
+                        Value var;
+
+                        Token equal = tokens[pos++];
+                        if (equal.type != TokenType::Assign) {
+                            throwError("Expected '=' after the operator.", equal, numLine);
+                            break;
+                        }
+
+                        if (isVarName(t))
+                            var = vars[name.text];
+                        else if (isLocalVarName(parent, t))
+                            var = funcs[parent].localVars[t.text];
+                        else {
+                            throwError("The variable is not defined.", name, numLine);
+                            break;
+                        }
+
+                        if (var.isString) {
+                            throwError("Cannot perform arithmetic operations on a string value.", name, numLine);
+                            break;
+                        }
+
+                        Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent, Layer, numLine);
+                        pos = arithmetic.newPos--;
+
+                        if (op.type == TokenType::Plus) {
+                            varNum = var.number + std::stoll(arithmetic.val.text);
+                        } else if (op.type == TokenType::Minus) {
+                            varNum = var.number - std::stoll(arithmetic.val.text);
+                        } else if (op.type == TokenType::Multiply) {
+                            varNum = var.number * std::stoll(arithmetic.val.text);
+                        } else if (op.type == TokenType::Divide) {
+                            if (std::stoll(arithmetic.val.text) == 0) {
+                                throwError("Division by zero is not allowed.", arithmetic.val, numLine);
+                                break;
+                            }
+                            varNum = var.number / std::stoll(arithmetic.val.text);
+                        } else if (op.type == TokenType::Modulo) {
+                            if (std::stoll(arithmetic.val.text) == 0) {
+                                throwError("Modulo by zero is not allowed.", arithmetic.val, numLine);
+                                break;
+                            }
+                            varNum = var.number % std::stoll(arithmetic.val.text);
                         }
                     } else {
                         throwError("Expected '=' or '++' or '--' after the variable name.", op, numLine);
@@ -8538,75 +8605,46 @@ void cmd_script(const std::vector<std::string>& args, Terminal& term) {
         return;
     }
 
-    std::string script = R"(
-        const testNum = 50;
-        let x = 10 * 2;
-        let result = x + testNum + 30;
-        let msg = "Hello GeistScript";
-
-        result++;
-
-        while (x <= 30) {
-            if (x <= 24) {
-                print("x: " + x + " is <= 24");
-            } else if (x > 24 && x <= 27) {
-                print("x: " + x + " is > 24 and <= 27");
-            } else {
-                print("x: " + x + " is > 27");
-            }
-            x++;
-        }
-
-        //This is a single Line Comment
-
-        for (let i = 0; i <= 20; i++) {
-            if (((i + 1) % 2) == 0) {
-                print("i: " + i);
-            } else {
-                print("i is Even");
-            }
-        }
-
-        /*
-        This is a multiline comment
-        This Text will be ignored by the Interpreter
-        */
-
-        print(msg);
-        print(result);
-
-        function add(a, b) {
-            return a + b;
-        }
-
-        function testWorld(name, age) {
-            const userData = name + " " + age;
-            print(name + " " + age);
-            print(userData);
-        }
-
-        function HelloWorld() {
-            const userName = "User";
-            let testSuccessfull = "Hello World";
-            print(testSuccessfull);
-
-            testWorld(userName, 25);
-
-            function yesNo() {
-                print("YesNo Func Executed");
-            }
-
-            yesNo();
-        }
-
-        const sum = add(5, 10);
-        print(sum);         //This is the same
-        print(add(5, 10));  //This is the same
-
-        HelloWorld();
-    )";
+    std::string type = "script";
+    std::string scriptExt = "gsScript";
+    std::string errorCol = getAnsiColor('C');
 
     GeistScript::Interpreter interp;
+    std::string script;
+    int startIndex = 1;
+
+    for (size_t i = startIndex; i < args.size(); i++) {
+        std::string fileName = args[i];
+        std::ifstream file(fileName);
+
+        if (fileName.substr(fileName.find_last_of(".") + 1) != scriptExt) {
+            std::cerr   << errorCol 
+                        << type << ": invalid file type for (" 
+                        << fileName << "). Expected ." 
+                        << scriptExt << "\n" 
+                        << currentColor;
+            continue;
+        }
+        if (!file.is_open()) {
+            std::cerr   << errorCol 
+                        << type << ": cannot open " 
+                        << fileName << "\n" 
+                        << currentColor;
+            continue;
+        }
+
+        std::string line;
+        int lineNumber = 1;
+        (void)lineNumber;
+
+        while (std::getline(file, line)) {
+            script += line + "\n";
+            lineNumber++;
+        }
+
+        file.close();
+    }
+
     interp.execute(script);
 }
 
