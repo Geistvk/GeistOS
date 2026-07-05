@@ -10,6 +10,8 @@
 #include <cctype>
 #include <memory>
 
+#include <wininet.h>
+
 #include <stdexcept>
 #include <cctype>
 
@@ -2618,7 +2620,8 @@ private:
                         {"Added", addedColor, "If, While and For Loop support in GeistScript"},
                         {"Added", addedColor, "Else If and Else support in GeistScript"},
                         {"Added", addedColor, "Short form Arithmetics such as +=, -=, *=, /= and %="},
-                        {"Reworked", reworkColor, "The script command to now only take .gsScript files as an input"}
+                        {"Reworked", reworkColor, "The script command to now only take .gsScript files as an input"},
+                        {"Added", addedColor, "Very early Versions of Helper Functions for the Class support in GeistScript"}
                     }
                 }
             }
@@ -6977,6 +6980,7 @@ namespace GeistScript {
         Assign, Equal, NotEqual, And, Or, Not, String,
         Less, Greater, LessEqual, GreaterEqual,
         LParen, RParen, LBrace, RBrace, LBracket, RBracket,
+        NewClass, Public, Private, Protected, Dot,
         Semicolon, Comma
     };
     
@@ -7048,6 +7052,11 @@ namespace GeistScript {
                     if (id == "for") return {TokenType::For, id};
                     if (id == "function") return {TokenType::Function, id};
                     if (id == "return") return {TokenType::Return, id};
+                    if (id == "nl") return {TokenType::NewLine, id};
+                    if (id == "class") return {TokenType::NewClass, id};
+                    if (id == "public") return {TokenType::Public, id};
+                    if (id == "private") return {TokenType::Private, id};
+                    if (id == "protected") return {TokenType::Protected, id};
 
                     return {TokenType::Identifier, id};
                 }
@@ -7079,6 +7088,7 @@ namespace GeistScript {
                     case ']':   return {TokenType::RBracket, "]"};
                     case ';':   return {TokenType::Semicolon, ";"};
                     case ',':   return {TokenType::Comma, ","};
+                    case '.':   return {TokenType::Dot, "."};
                     case '!':
                         if (src[pos] == '=') {
                             pos++;
@@ -7169,11 +7179,42 @@ namespace GeistScript {
         bool hasReturned = false;
         Token returnValue = {TokenType::End, ""};
     };
+
+    enum class AccessModifier {
+        Public,
+        Private,
+        Protected
+    };
+
+    struct ClassVariable {
+        Value value;
+        AccessModifier access = AccessModifier::Private;
+    };
+
+    struct ClassFunction {
+        Func func;
+        AccessModifier access = AccessModifier::Private;
+    };
+
+    struct Class {
+        std::string name;
+        std::string parent;
+        int layer;
+
+        std::unordered_map<std::string, ClassVariable> variables;
+        std::unordered_map<std::string, ClassFunction> functions;
+    };
     
     class Interpreter {
     private:
         std::unordered_map<std::string, Value> vars;
         std::unordered_map<std::string, Func> funcs;
+        std::unordered_map<std::string, Class> classes;
+
+        struct ConditionResult {
+            bool value;
+            size_t newPos;
+        };
 
         Token combine(Token token1, Token token2) {
             return {TokenType::Empty, token1.text + token2.text};
@@ -7232,6 +7273,39 @@ namespace GeistScript {
             return false;
         }
 
+        bool isClassName(Token token) {
+            return classes.find(token.text) != classes.end();
+        }
+
+        bool isClassVariable(Token cls, Token var) {
+            if (!isClassName(cls))
+                return false;
+
+            auto &c = classes[cls.text];
+            return c.variables.find(var.text) != c.variables.end();
+        }
+
+        bool isClassFunction(Token cls, Token func) {
+            if (!isClassName(cls))
+                return false;
+
+            auto &c = classes[cls.text];
+            return c.functions.find(func.text) != c.functions.end();
+        }
+
+        bool isClassAccess(
+            const std::vector<Token>& tokens,
+            size_t pos)
+        {
+            if (pos + 2 >= tokens.size())
+                return false;
+
+            return
+                tokens[pos].type == TokenType::Identifier &&
+                tokens[pos + 1].type == TokenType::Dot &&
+                tokens[pos + 2].type == TokenType::Identifier;
+        }
+
         int executeFunction(
             Token t, 
             const int Layer, 
@@ -7242,9 +7316,9 @@ namespace GeistScript {
             std::string caller = "root",
             bool isRetCall = false
         ) {
-            std::function<void(const std::vector<Token>&, std::string, int)> run;
-            run = [&](const std::vector<Token>& toks, std::string p, int l) {
-                executeTokens(toks, p, l);
+            std::function<void(const std::vector<Token>&, std::string, int, int)> run;
+            run = [&](const std::vector<Token>& toks, std::string p, int l, int n) {
+                executeTokens(toks, p, l, n);
             };
 
             int newLayer = Layer;
@@ -7341,11 +7415,22 @@ namespace GeistScript {
                                                                 varNum);
             }
 
-            run(func.body, func.name, newLayer);
+            run(func.body, func.name, newLayer, numLine);
 
             Token ret = func.returnValue;
             return pos;
         }
+
+
+
+
+
+
+
+
+
+
+
 
         struct Arithmetic {
             Token val;
@@ -7896,11 +7981,6 @@ namespace GeistScript {
             throw std::runtime_error("Invalid condition expression.");
         }
 
-        struct ConditionResult {
-            bool value;
-            size_t newPos;
-        };
-
         ConditionResult initializeCondition(
             const std::vector<Token>& tokens,
             size_t pos,
@@ -7946,7 +8026,26 @@ namespace GeistScript {
             return { result, pos };
         }
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        
+
     public:
+        std::vector<std::string> geistScriptCode;
         void execute(const std::string& source) {
             Lexer lex(source);
 
@@ -7961,21 +8060,28 @@ namespace GeistScript {
             executeTokens(tokens);
         }
 
-        void executeTokens(const std::vector<Token>& tokens, std::string parent = "root", int layer = 0) {
+        void executeTokens(const std::vector<Token>& tokens, std::string parent = "root", int layer = 0, int numLine = 0) {
             const int Layer = layer;
             size_t pos = 0;
-            int numLine = 0;
 
-            std::function<void(const std::vector<Token>&, std::string, int)> run;
-            run = [&](const std::vector<Token>& toks, std::string p, int l) {
-                executeTokens(toks, p, l);
+            std::function<void(const std::vector<Token>&, std::string, int, int)> run;
+            run = [&](const std::vector<Token>& toks, std::string p, int l, int numLine) {
+                executeTokens(toks, p, l, numLine);
             };
 
             while (pos < tokens.size()) {
-                numLine++;
                 Token t = tokens[pos++];
                 if (t.type == TokenType::End)
                     break;
+
+                if (t.type == TokenType::Minus) {
+                    Token next = tokens[pos++];
+
+                    if (next.type == TokenType::NewLine) {
+                        numLine++;
+                        std::cout << "DEBUG: Line " << numLine << " | ";
+                    }
+                }
 
                 if (parent != "root" && funcs[parent].hasReturned)
                     return;
@@ -8276,7 +8382,7 @@ namespace GeistScript {
                     bool executed = false;
 
                     if (evaluateCondition(parent, condition)) {
-                        executeTokens(body, parent, Layer + 1);
+                        executeTokens(body, parent, Layer + 1, numLine);
                         executed = true;
                     }
 
@@ -8340,7 +8446,7 @@ namespace GeistScript {
                             }
 
                             if (!executed && evaluateCondition(parent, cond2)) {
-                                executeTokens(body2, parent, Layer + 1);
+                                executeTokens(body2, parent, Layer + 1, numLine);
                                 executed = true;
                             }
                         }
@@ -8369,7 +8475,7 @@ namespace GeistScript {
                             }
 
                             if (!executed) {
-                                executeTokens(body3, parent, Layer + 1);
+                                executeTokens(body3, parent, Layer + 1, numLine);
                                 executed = true;
                             }
 
@@ -8434,7 +8540,7 @@ namespace GeistScript {
                         if (!cond)
                             break;
 
-                        executeTokens(body, parent, Layer + 1);
+                        executeTokens(body, parent, Layer + 1, numLine);
                     }
                 }
 
@@ -8496,11 +8602,11 @@ namespace GeistScript {
 
                     body.push_back({TokenType::End, ""});
 
-                    executeTokens(init, parent, Layer + 1);
+                    executeTokens(init, parent, Layer + 1, numLine);
 
                     while (evaluateCondition(parent, cond)) {
-                        executeTokens(body, parent, Layer + 1);
-                        executeTokens(update, parent, Layer + 1);
+                        executeTokens(body, parent, Layer + 1, numLine);
+                        executeTokens(update, parent, Layer + 1, numLine);
                     }
                 }
 
@@ -8586,11 +8692,68 @@ namespace GeistScript {
                     //Function is now ready to use
                 }
 
+                else if (t.type == TokenType::NewClass) {
+                    Token name = tokens[pos++];
+                    if (isTokenType(name)) {
+                        throwError("The class name is invalid.", name, numLine);
+                        break;
+                    } else if (classes.find(name.text) != classes.end()) {
+                        throwError("A class with this name already exists.", name, numLine);
+                        break;
+                    }
+
+                    std::vector<Token> classBody;
+                    Token lBrace = tokens[pos++];
+                    if (lBrace.type != TokenType::LBrace) {
+                        throwError("Expected '{' to begin the class body.", lBrace, numLine);
+                        break;
+                    }
+
+                    int braceDepth = 1;
+                    while (braceDepth > 0) {
+                        Token b = tokens[pos++];
+
+                        if (b.type == TokenType::LBrace) {
+                            braceDepth++;
+                        }
+                        else if (b.type == TokenType::RBrace) {
+                            braceDepth--;
+                            if (braceDepth == 0)
+                                break;
+                        }
+
+                        classBody.push_back(b);
+                    }
+
+                    classes[name.text] = {
+                        name.text,
+                        {},
+                        {}
+                    };
+
+                    executeTokens(classBody, name.text, Layer + 1, numLine);
+                }
+
                 else {
                     if (!isTokenType(t))
                         throwError("This statement or expression is not recognized.", t, numLine);
                 }
             }
+        }
+
+        std::string getFileContent() {
+            std::vector<std::string> lines;
+            std::string result;
+
+            return result;
+        }
+
+        void downloadExample() {
+            std::string fileName = "script.gsScript";
+            std::ofstream outfile (fileName);
+            outfile << "my text here!" << std::endl;
+            outfile.close();
+            std::cout << "Example script created: " << fileName << "\n";
         }
     };
 }
@@ -8612,6 +8775,12 @@ void cmd_script(const std::vector<std::string>& args, Terminal& term) {
     GeistScript::Interpreter interp;
     std::string script;
     int startIndex = 1;
+    int numLine = 0;
+
+    if (args[1] == "--example" || args[1] == "-e") {
+        interp.downloadExample();
+        return;
+    }
 
     for (size_t i = startIndex; i < args.size(); i++) {
         std::string fileName = args[i];
@@ -8619,7 +8788,7 @@ void cmd_script(const std::vector<std::string>& args, Terminal& term) {
 
         if (fileName.substr(fileName.find_last_of(".") + 1) != scriptExt) {
             std::cerr   << errorCol 
-                        << type << ": invalid file type for (" 
+                        << type << ": Invalid file type for (" 
                         << fileName << "). Expected ." 
                         << scriptExt << "\n" 
                         << currentColor;
@@ -8627,8 +8796,10 @@ void cmd_script(const std::vector<std::string>& args, Terminal& term) {
         }
         if (!file.is_open()) {
             std::cerr   << errorCol 
-                        << type << ": cannot open " 
-                        << fileName << "\n" 
+                        << type << ": Cannot open " 
+                        << fileName 
+                        << " filename is invalid or file does not exist."
+                        << "\n" 
                         << currentColor;
             continue;
         }
@@ -8638,8 +8809,10 @@ void cmd_script(const std::vector<std::string>& args, Terminal& term) {
         (void)lineNumber;
 
         while (std::getline(file, line)) {
-            script += line + "\n";
+            interp.geistScriptCode.push_back(line);
+            script += line + "-nl" + "\n";
             lineNumber++;
+            numLine++;
         }
 
         file.close();
