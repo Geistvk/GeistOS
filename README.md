@@ -50,7 +50,8 @@ The result is an environment that remains readable, predictable, and easy to ext
   - simple to understand Interpreter
 
 Example Geistscript code with all of it's Features. <br>
-This is a simple Example just to show it's capabilities.
+This is a simple Example just to show it's capabilities. <br>
+More Information about GeistScript in the [GeistScript Wiki](https://github.com/Geistvk/GeistOS/wiki/GeistScript) page
 
 ```javascript
 const testNum = 50;
