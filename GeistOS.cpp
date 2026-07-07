@@ -6980,7 +6980,7 @@ namespace GeistScript {
         Assign, Equal, NotEqual, And, Or, Not, String,
         Less, Greater, LessEqual, GreaterEqual,
         LParen, RParen, LBrace, RBrace, LBracket, RBracket,
-        NewClass, Public, Private, Protected, Dot,
+        NewClass, New, Public, Private, Protected, Dot,
         Semicolon, Comma
     };
     
@@ -7057,7 +7057,7 @@ namespace GeistScript {
                     if (id == "public") return {TokenType::Public, id};
                     if (id == "private") return {TokenType::Private, id};
                     if (id == "protected") return {TokenType::Protected, id};
-
+                    if (id == "new") return {TokenType::New, id};
                     return {TokenType::Identifier, id};
                 }
 
@@ -7137,7 +7137,7 @@ namespace GeistScript {
             return {TokenType::End, ""};
         }
     };
-    
+
     struct Value {
         bool isConst = false;
         bool isString = false;
@@ -7145,17 +7145,20 @@ namespace GeistScript {
         std::string str;
         int layer;
         std::string parent;
+        Token className = {};
 
         static Value handleVal(
             std::string par, 
             int lay, 
             bool isConstant,
             std::string vS = "",
-            long long vL = 0
+            long long vL = 0,
+            Token className = {}
         ) {
             Value x;
             x.layer = lay;
             x.parent = par;
+            x.className = className;
             x.isConst = isConstant;
 
             if (vS != "") {
@@ -7201,8 +7204,8 @@ namespace GeistScript {
         std::string parent;
         int layer;
 
-        std::unordered_map<std::string, ClassVariable> variables;
-        std::unordered_map<std::string, ClassFunction> functions;
+        std::unordered_map<std::string, ClassVariable> variables = {};
+        std::unordered_map<std::string, ClassFunction> functions = {};
     };
     
     class Interpreter {
@@ -7216,8 +7219,12 @@ namespace GeistScript {
             size_t newPos;
         };
 
-        Token combine(Token token1, Token token2) {
-            return {TokenType::Empty, token1.text + token2.text};
+        Token combine(std::vector<Token> tokens) {
+            std::string combinedText;
+            for (const auto& t : tokens) {
+                combinedText += t.text + " ";
+            }
+            return {TokenType::Empty, combinedText};
         }
 
         bool isTokenType(Token token) {
@@ -7314,7 +7321,8 @@ namespace GeistScript {
             std::vector<Token> tokens,
             int pos,
             std::string caller = "root",
-            bool isRetCall = false
+            bool isRetCall = false,
+            bool isConstructor = false
         ) {
             std::function<void(const std::vector<Token>&, std::string, int, int)> run;
             run = [&](const std::vector<Token>& toks, std::string p, int l, int n) {
@@ -7323,8 +7331,55 @@ namespace GeistScript {
 
             int newLayer = Layer;
             newLayer++;
+            bool isClassFunc = false;
             auto& func = funcs[t.text];
             func.body.push_back({TokenType::End, ""});
+
+            /*
+                    struct Func {
+                        int layer;
+                        std::string parent;
+                        std::string name;
+                        std::vector<Token> params;
+                        std::vector<Token> body;
+                        std::unordered_map<std::string, Value> localVars = {};
+                        bool hasReturned = false;
+                        Token returnValue = {TokenType::End, ""};
+                    };
+
+                    enum class AccessModifier {
+                        Public,
+                        Private,
+                        Protected
+                    };
+
+                    struct ClassVariable {
+                        Value value;
+                        AccessModifier access = AccessModifier::Private;
+                    };
+
+                    struct ClassFunction {
+                        Func func;
+                        AccessModifier access = AccessModifier::Private;
+                    };
+
+                    struct Class {
+                        std::string name;
+                        std::string parent;
+                        int layer;
+
+                        std::unordered_map<std::string, ClassVariable> variables;
+                        std::unordered_map<std::string, ClassFunction> functions;
+                    };
+                    */
+
+            if (isClassName({TokenType::Empty, parent}) && !isConstructor) {
+                isClassFunc = true;
+                func = classes[parent].functions[t.text].func;
+            } else if (isClassName({TokenType::Empty, parent}) && isConstructor) {
+                isClassFunc = true;
+                func = classes[parent].functions["constructor"].func;
+            }
 
             func.hasReturned = false;
             func.returnValue = {TokenType::End, ""};
@@ -7333,13 +7388,13 @@ namespace GeistScript {
 
             if ((func.parent != parent && func.layer > Layer) || func.layer > Layer) {
                 throwError("This function is not accessible in the current scope.", t, numLine);
-                return 0;
+                return pos;
             }
 
             Token LParen = tokens[pos++];
             if (LParen.type != TokenType::LParen) {
                 throwError("Expected '(' after the function name.", LParen, numLine);
-                return 0;
+                return pos;
             }
 
             Token p = tokens[pos++];
@@ -7354,7 +7409,7 @@ namespace GeistScript {
                         arg.type != TokenType::Number &&
                         arg.type == TokenType::StringLiteral) {
                         throwError("The variable name is invalid.", arg, numLine);
-                        break;
+                        return pos;
                     }
                     args.push_back(arg);
                 }
@@ -7365,18 +7420,18 @@ namespace GeistScript {
             Token RParen = tokens[pos++]; // )
             if (RParen.type != TokenType::RParen) {
                 throwError("Expected ')' to close the function arguments.", RParen, numLine);
-                return 0;
+                return pos;
             }
 
             Token semi = tokens[pos++];
             if (semi.type != TokenType::Semicolon && !isRetCall && caller == "print") {
                 throwError("Expected ';' after the function call.", semi, numLine);
-                return 0;
+                return pos;
             }
 
             if (args.size() != func.params.size()) {
                 throwError("The function was called with the wrong number of arguments.", {TokenType::End, func.name}, numLine);
-                return 0;
+                return pos;
             }
 
             for (size_t i = 0; i < args.size(); i++) {
@@ -7389,13 +7444,13 @@ namespace GeistScript {
                     arg.type != TokenType::StringLiteral && 
                     arg.type != TokenType::Number) {
                     throwError("One or more arguments are invalid or undefined.", args[i], numLine);
-                    break;
+                    return pos;
 
                 } else if (arg.type == TokenType::Identifier || isVarName(arg)) {
                     auto& var = vars[arg.text];
                     if ((var.parent != parent && var.layer > Layer) || var.layer > Layer) {
                         throwError("This variable is not accessible in the current scope.", arg, numLine);
-                        break;
+                        return pos;
                     }
                     isConst = var.isConst;
 
@@ -7407,12 +7462,20 @@ namespace GeistScript {
                     varNum = std::stoll(arg.text);
                 }
 
-                func.localVars[func.params[i].text] = Value::handleVal(
-                                                                func.name, 
-                                                                newLayer, 
-                                                                isConst, 
-                                                                varStr, 
-                                                                varNum);
+                if (!isClassFunc)
+                    func.localVars[func.params[i].text] = Value::handleVal(
+                                                                    func.name, 
+                                                                    newLayer, 
+                                                                    isConst, 
+                                                                    varStr, 
+                                                                    varNum);
+                else if (isClassFunc)
+                    classes[parent].variables[func.params[i].text].value = Value::handleVal(
+                                                                    func.name, 
+                                                                    newLayer, 
+                                                                    isConst, 
+                                                                    varStr, 
+                                                                    varNum);
             }
 
             run(func.body, func.name, newLayer, numLine);
@@ -8039,6 +8102,385 @@ namespace GeistScript {
 
 
 
+        size_t registerVar(
+            std::vector<Token> tokens, 
+            size_t pos, 
+            const int Layer, 
+            std::string parent, 
+            int numLine,
+            Token t
+        ) {
+            bool isConst = false;
+            std::string par = parent;
+            int lay = Layer;
+            Token name;
+            std::string varStr = "";
+            long long varNum = 0;
+
+            if (!isVarName(t) && !isLocalVarName(parent, t)) {
+                if (t.type == TokenType::Const)
+                    isConst = true;
+                name = tokens[pos++];
+                
+                if (isTokenType(name)) {
+                    throwError("The variable name is invalid.", combine({tokens[pos - 2], tokens[pos - 1], tokens[pos]}), numLine);
+                    return pos;
+                } 
+            } else if ((isVarName(t) && vars[t.text].isConst) || 
+                        (isLocalVarName(parent, t) && funcs[parent].localVars[t.text].isConst)) {
+                throwError("Cannot modify the value of a constant.", combine({t, name}), numLine);
+                return pos;
+            } else if (isClassName({TokenType::Empty, parent})) {
+                Token dot = tokens[pos++];
+                if (dot.type != TokenType::Dot) {
+                    throwError("Expected '.' after the class name.", dot, numLine);
+                    return pos;
+                }
+
+                if (isClassVariable(t, tokens[pos])) {
+                    name = t;
+                    par = t.text;
+                    lay = Layer;
+                } else {
+                    throwError("Expected a class Variable after the class name.", tokens[pos], numLine);
+                    return pos;
+                }
+            } else {
+                name = t;
+                if (isVarName(t)) {
+                    par = vars[name.text].parent;
+                    lay = vars[name.text].layer;
+                } else if (isLocalVarName(parent, t)) {
+                    par = funcs[parent].localVars[t.text].parent;
+                    lay = funcs[parent].localVars[t.text].layer;
+                }
+            }
+
+            if (name.type == TokenType::Let || name.type == TokenType::Const)
+                name = tokens[pos++];
+
+            //std::cout << "DEBUG1: " << t.text << "\n";
+            //std::cout << "DEBUG2: " << name.text << "\n";
+            Token op = tokens[pos++]; // =
+
+            if (op.type == TokenType::Assign) {
+                if (tokens[pos].type == TokenType::New) {
+                    pos++; // new
+                    Token className = tokens[pos++];
+
+                    std::cout << "This code runs\n";
+
+                    if (!isClassName(className)) {
+                        throwError("Unknown class.", className, numLine);
+                        return pos;
+                    }
+
+                    if ((isVarName(name) || !isVarName(name)) && !isLocalVarName(parent, name)) {
+                        vars[name.text] = Value::handleVal(
+                            par,
+                            lay,
+                            isConst,
+                            varStr,
+                            varNum,
+                            className);
+                    } else if (isLocalVarName(parent, name)) {
+                        funcs[parent].localVars[name.text] = Value::handleVal(
+                            par,
+                            lay,
+                            isConst,
+                            varStr,
+                            varNum,
+                            className);
+                    } 
+
+                    pos = executeFunction(
+                        tokens[pos - 1], 
+                        Layer + 1, 
+                        className.text, 
+                        numLine, 
+                        tokens, 
+                        pos - 1, 
+                        "constructor", 
+                        false, 
+                        true
+                    );
+
+                    return pos;
+                } else {
+                    Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent, Layer, numLine);
+                    Token val = arithmetic.val;
+                    pos = arithmetic.newPos--;
+
+                    if (val.type == TokenType::Number)
+                        varNum = std::stoll(val.text);
+                    else if (val.type == TokenType::StringLiteral) 
+                        varStr = val.text;
+                }
+
+            } else if (op.type == TokenType::And || op.type == TokenType::Or ||
+                       op.type == TokenType::Equal || op.type == TokenType::NotEqual ||
+                       op.type == TokenType::Less || op.type == TokenType::Greater ||
+                       op.type == TokenType::LessEqual || op.type == TokenType::GreaterEqual) {
+                std::vector<Token> condition;
+                condition.push_back(name);
+                condition.push_back(op);
+
+                while (pos < tokens.size()) {
+                    Token next = tokens[pos++];
+                    if (next.type == TokenType::Semicolon)
+                        break;
+                    condition.push_back(next);
+                }
+
+                bool result = evaluateCondition(parent, condition);
+                varStr = result ? "True" : "False";
+            } else if (op.type == TokenType::Plus ||
+                        op.type == TokenType::Minus) {
+                Token next = tokens[pos++];
+                if (next.type == op.type) {
+                    Value var;
+                    std::string opName;
+                    std::string operation;
+
+                    if (isVarName(t))
+                        var = vars[name.text];
+                    else if (isLocalVarName(parent, t))
+                        var = funcs[parent].localVars[t.text];
+
+                    if (next.type == TokenType::Plus) {
+                        opName = "Increment";
+                        operation = "++";
+                    } else if (next.type == TokenType::Minus) {
+                        opName = "Decrement";
+                        operation = "--";
+                    }
+
+                    if (var.isString) {
+                        throwError("Cannot " + opName + " a string value using '" + operation + "'.", name, numLine);
+                        return pos;
+                    }
+
+                    long long val = var.number;
+                    isConst = var.isConst;
+
+                    if (op.type == TokenType::Plus)
+                        varNum = ++val;
+                    else if (op.type == TokenType::Minus)
+                        varNum = --val;
+                } else {
+                    throwError("Expected '++' or '--'. Both operators must match.", combine({op, next}), numLine);
+                    return pos;
+                }
+            } else if ( op.type == TokenType::Plus || 
+                        op.type == TokenType::Minus ||
+                        op.type == TokenType::Multiply || 
+                        op.type == TokenType::Divide ||
+                        op.type == TokenType::Modulo) {
+                Value var;
+
+                Token equal = tokens[pos++];
+                if (equal.type != TokenType::Assign) {
+                    throwError("Expected '=' after the operator.", equal, numLine);
+                    return pos;
+                }
+
+                if (isVarName(t))
+                    var = vars[name.text];
+                else if (isLocalVarName(parent, t))
+                    var = funcs[parent].localVars[t.text];
+                else {
+                    throwError("The variable is not defined.", name, numLine);
+                    return pos;
+                }
+
+                if (var.isString) {
+                    throwError("Cannot perform arithmetic operations on a string value.", name, numLine);
+                    return pos;
+                }
+
+                Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent, Layer, numLine);
+                pos = arithmetic.newPos--;
+
+                if (op.type == TokenType::Plus) {
+                    varNum = var.number + std::stoll(arithmetic.val.text);
+                } else if (op.type == TokenType::Minus) {
+                    varNum = var.number - std::stoll(arithmetic.val.text);
+                } else if (op.type == TokenType::Multiply) {
+                    varNum = var.number * std::stoll(arithmetic.val.text);
+                } else if (op.type == TokenType::Divide) {
+                    if (std::stoll(arithmetic.val.text) == 0) {
+                        throwError("Division by zero is not allowed.", arithmetic.val, numLine);
+                        return pos;
+                    }
+                    varNum = var.number / std::stoll(arithmetic.val.text);
+                } else if (op.type == TokenType::Modulo) {
+                    if (std::stoll(arithmetic.val.text) == 0) {
+                        throwError("Modulo by zero is not allowed.", arithmetic.val, numLine);
+                        return pos;
+                    }
+                    varNum = var.number % std::stoll(arithmetic.val.text);
+                }
+            } else {
+                throwError("Expected '=' or '++' or '--' after the variable name.", op, numLine);
+                return pos;
+            }
+            
+            if (!isClassName({TokenType::Empty, parent})) {
+                if ((isVarName(name) || !isVarName(name)) && !isLocalVarName(parent, name)) {
+                    vars[name.text] = Value::handleVal(
+                        par,
+                        lay,
+                        isConst,
+                        varStr,
+                        varNum);
+                } else if (isLocalVarName(parent, name)) {
+                    funcs[parent].localVars[name.text] = Value::handleVal(
+                        par,
+                        lay,
+                        isConst,
+                        varStr,
+                        varNum);
+                } 
+            } else if (isClassName({TokenType::Empty, parent})) {
+                classes[parent].variables[name.text] = {
+                    Value::handleVal(par, lay, isConst, varStr, varNum),
+                    AccessModifier::Private
+                };
+            } else {
+                throwError("This variable couldn't be saved", name, numLine);
+                return pos;
+            }
+                
+    
+            Token semi = tokens[pos++];
+            if (semi.type != TokenType::Semicolon) {
+                throwError("Unexpected Character6", semi, numLine);
+                return pos;
+            }
+            return pos;
+        }
+
+
+
+
+        size_t registerFunc(
+            std::vector<Token> tokens, 
+            size_t pos, 
+            const int Layer, 
+            std::string parent, 
+            int numLine,
+            bool isConstructor = false
+        ) {
+
+            //Check if Function Name is valid
+            Token name;
+            if (isConstructor) name = tokens[pos];
+            else  name = tokens[pos++];
+
+            if (isTokenType(name)) {
+                throwError("The function name is invalid.", name, numLine);
+                return pos;
+            } else if (isFuncName(name)) {
+                throwError("A function with this name already exists.", name, numLine);
+                return pos;
+            }
+
+            std::vector<Token> params = {};
+            std::vector<Token> funcBody;
+
+            //Check if this Function has a (
+            Token LParen = tokens[pos++]; // (
+            if (LParen.type != TokenType::LParen) {
+                throwError("Expected '(' after the function name.", LParen, numLine);
+                return pos;
+            }
+
+            //Iterate over all the Parameters in the ()
+            Token p = tokens[pos++];
+            while (p.type != TokenType::LParen &&
+                    p.type != TokenType::RParen &&
+                    p.type != TokenType::LBrace &&
+                    p.type != TokenType::RBrace) {
+                Token arg = p;
+                if (arg.type != TokenType::Comma) {
+                    //std::cout << "DEBUGARG: " << arg.text << "\n";
+                    if (isTokenType(arg)) {
+                        throwError("This variable name is invalid", arg, numLine);
+                        return pos;
+                    }
+                    auto param = arg;
+                    params.push_back(param);
+                }
+                p = tokens[pos++];
+            }
+            pos--;
+            Token RParen = tokens[pos++]; // )
+            if (RParen.type != TokenType::RParen) {
+                throwError("Expected ')' to close the function parameter list.", RParen, numLine);
+                return pos;
+            }
+
+
+            //Check if Function has a {
+            Token lBrace = tokens[pos++]; // {
+            if (lBrace.type != TokenType::LBrace) {
+                throwError("Expected '{' to begin the function body.", lBrace, numLine);
+                return pos;
+            }
+
+            //Iterate over Function Body 
+            int braceDepth = 1;
+            while (braceDepth > 0) {
+                Token b = tokens[pos++];
+
+                if (b.type == TokenType::LBrace) {
+                    braceDepth++;
+                }
+                else if (b.type == TokenType::RBrace) {
+                    braceDepth--;
+                    if (braceDepth == 0)
+                        break;
+                }
+
+                funcBody.push_back(b);
+            }
+
+            //Register function in the unordered map 
+            if (isConstructor)
+                classes[parent].functions["constructor"] = {
+                    {Layer, parent, name.text, params, funcBody},
+                    AccessModifier::Public
+                };
+            else if (parent == "root" || isFuncName({TokenType::Empty, parent}))
+                funcs[name.text] = {
+                    Layer,
+                    parent,
+                    name.text,
+                    params,
+                    funcBody
+                };
+            else if (isClassName({TokenType::Empty, parent}))
+                classes[parent].functions[name.text] = {
+                    {Layer, parent, name.text, params, funcBody},
+                    AccessModifier::Private
+                };
+            //Function is now ready to use
+
+            return pos;
+        }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -8070,24 +8512,40 @@ namespace GeistScript {
             };
 
             while (pos < tokens.size()) {
+                numLine++;
                 Token t = tokens[pos++];
                 if (t.type == TokenType::End)
                     break;
 
-                if (t.type == TokenType::Minus) {
+                /*if (t.type == TokenType::Minus) {
                     Token next = tokens[pos++];
 
                     if (next.type == TokenType::NewLine) {
                         numLine++;
-                        std::cout << "DEBUG: Line " << numLine << " | ";
+                        //std::cout << "DEBUG: Line " << numLine << " | ";
                     }
-                }
+                }*/
 
                 if (parent != "root" && funcs[parent].hasReturned)
                     return;
 
                 if (isFuncName(t)) {
                     pos = executeFunction(t, Layer, parent, numLine, tokens, pos);
+                }
+
+                if (isClassName(vars[t.text].className)) {
+                    Token dot = tokens[pos++];
+                    if (dot.type != TokenType::Dot) {
+                        throwError("Expected '.' after the class name.", dot, numLine);
+                        break;
+                    }
+
+                    if (isClassFunction(t, tokens[pos])) {
+                        pos = executeFunction(t, layer + 1, t.text, numLine, tokens, pos);
+                    } else {
+                        throwError("Expected a class function after the class name.", tokens[pos], numLine);
+                        break;
+                    }
                 }
 
                 else if (t.type == TokenType::Return) {
@@ -8097,186 +8555,6 @@ namespace GeistScript {
                     funcs[parent].hasReturned = true;
 
                     return;
-                }
-
-                else if (t.type == TokenType::Let || 
-                        t.type == TokenType::Const ||
-                        isVarName(t)) {
-                    bool isConst = false;
-                    std::string par = parent;
-                    int lay = Layer;
-                    Token name;
-                    std::string varStr = "";
-                    long long varNum = 0;
-
-                    if (!isVarName(t) && !isLocalVarName(parent, t)) {
-                        if (t.type == TokenType::Const)
-                            isConst = true;
-                        name = tokens[pos++];
-                        if (isTokenType(name)) {
-                            throwError("The variable name is invalid.", name, numLine);
-                            break;
-                        } 
-                    } else if ((isVarName(t) && vars[t.text].isConst) || 
-                                (isLocalVarName(parent, t) && funcs[parent].localVars[t.text].isConst)) {
-                        throwError("Cannot modify the value of a constant.", t, numLine);
-                        break;
-                    } else {
-                        name = t;
-                        if (isVarName(t)) {
-                            par = vars[name.text].parent;
-                            lay = vars[name.text].layer;
-                        } else if (isLocalVarName(parent, t)) {
-                            par = funcs[parent].localVars[t.text].parent;
-                            lay = funcs[parent].localVars[t.text].layer;
-                        }
-                    }
-
-                    Token op = tokens[pos++]; // =
-
-                    if (op.type == TokenType::Assign) {
-                        Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent, Layer, numLine);
-                        Token val = arithmetic.val;
-                        pos = arithmetic.newPos--;
-        
-                        if (val.type == TokenType::Number)
-                            varNum = std::stoll(val.text);
-                        else if (val.type == TokenType::StringLiteral) 
-                            varStr = val.text;
-
-                    } else if (op.type == TokenType::And || op.type == TokenType::Or ||
-                               op.type == TokenType::Equal || op.type == TokenType::NotEqual ||
-                               op.type == TokenType::Less || op.type == TokenType::Greater ||
-                               op.type == TokenType::LessEqual || op.type == TokenType::GreaterEqual) {
-                        std::vector<Token> condition;
-                        condition.push_back(name);
-                        condition.push_back(op);
-
-                        while (pos < tokens.size()) {
-                            Token next = tokens[pos++];
-                            if (next.type == TokenType::Semicolon)
-                                break;
-                            condition.push_back(next);
-                        }
-
-                        bool result = evaluateCondition(parent, condition);
-                        varStr = result ? "True" : "False";
-                    } else if (op.type == TokenType::Plus ||
-                                op.type == TokenType::Minus) {
-                        Token next = tokens[pos++];
-                        if (next.type == op.type) {
-                            Value var;
-                            std::string opName;
-                            std::string operation;
-
-                            if (isVarName(t))
-                                var = vars[name.text];
-                            else if (isLocalVarName(parent, t))
-                                var = funcs[parent].localVars[t.text];
-
-                            if (next.type == TokenType::Plus) {
-                                opName = "Increment";
-                                operation = "++";
-                            } else if (next.type == TokenType::Minus) {
-                                opName = "Decrement";
-                                operation = "--";
-                            }
-
-                            if (var.isString) {
-                                throwError("Cannot " + opName + " a string value using '" + operation + "'.", name, numLine);
-                                break;
-                            }
-
-                            long long val = var.number;
-                            isConst = var.isConst;
-
-                            if (op.type == TokenType::Plus)
-                                varNum = ++val;
-                            else if (op.type == TokenType::Minus)
-                                varNum = --val;
-                        } else {
-                            throwError("Expected '++' or '--'. Both operators must match.", combine(op, next), numLine);
-                            break;
-                        }
-                    } else if ( op.type == TokenType::Plus || 
-                                op.type == TokenType::Minus ||
-                                op.type == TokenType::Multiply || 
-                                op.type == TokenType::Divide ||
-                                op.type == TokenType::Modulo) {
-                        Value var;
-
-                        Token equal = tokens[pos++];
-                        if (equal.type != TokenType::Assign) {
-                            throwError("Expected '=' after the operator.", equal, numLine);
-                            break;
-                        }
-
-                        if (isVarName(t))
-                            var = vars[name.text];
-                        else if (isLocalVarName(parent, t))
-                            var = funcs[parent].localVars[t.text];
-                        else {
-                            throwError("The variable is not defined.", name, numLine);
-                            break;
-                        }
-
-                        if (var.isString) {
-                            throwError("Cannot perform arithmetic operations on a string value.", name, numLine);
-                            break;
-                        }
-
-                        Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent, Layer, numLine);
-                        pos = arithmetic.newPos--;
-
-                        if (op.type == TokenType::Plus) {
-                            varNum = var.number + std::stoll(arithmetic.val.text);
-                        } else if (op.type == TokenType::Minus) {
-                            varNum = var.number - std::stoll(arithmetic.val.text);
-                        } else if (op.type == TokenType::Multiply) {
-                            varNum = var.number * std::stoll(arithmetic.val.text);
-                        } else if (op.type == TokenType::Divide) {
-                            if (std::stoll(arithmetic.val.text) == 0) {
-                                throwError("Division by zero is not allowed.", arithmetic.val, numLine);
-                                break;
-                            }
-                            varNum = var.number / std::stoll(arithmetic.val.text);
-                        } else if (op.type == TokenType::Modulo) {
-                            if (std::stoll(arithmetic.val.text) == 0) {
-                                throwError("Modulo by zero is not allowed.", arithmetic.val, numLine);
-                                break;
-                            }
-                            varNum = var.number % std::stoll(arithmetic.val.text);
-                        }
-                    } else {
-                        throwError("Expected '=' or '++' or '--' after the variable name.", op, numLine);
-                        break;
-                    }
-
-                    if ((isVarName(name) || !isVarName(name)) && !isLocalVarName(parent, name)) {
-                        vars[name.text] = Value::handleVal(
-                            par,
-                            lay,
-                            isConst,
-                            varStr,
-                            varNum);
-                    } else if (isLocalVarName(parent, name)) {
-                        funcs[parent].localVars[name.text] = Value::handleVal(
-                            par,
-                            lay,
-                            isConst,
-                            varStr,
-                            varNum);
-                    } else {
-                        throwError("This variable couldn't be saved", name, numLine);
-                        break;
-                    }
-                        
-    
-                    Token semi = tokens[pos++];
-                    if (semi.type != TokenType::Semicolon) {
-                        throwError("Unexpected Character6", semi, numLine);
-                        break;
-                    }
                 }
     
                 else if (t.type == TokenType::Print) {
@@ -8611,85 +8889,7 @@ namespace GeistScript {
                 }
 
                 else if (t.type == TokenType::Function) {
-                    //Check if Function Name is valid
-                    Token name = tokens[pos++];
-                    if (isTokenType(name)) {
-                        throwError("The function name is invalid.", name, numLine);
-                        break;
-                    } else if (isFuncName(name)) {
-                        throwError("A function with this name already exists.", name, numLine);
-                        break;
-                    }
-
-                    std::vector<Token> params = {};
-                    std::vector<Token> funcBody;
-
-                    //Check if this Function has a (
-                    Token LParen = tokens[pos++]; // (
-                    if (LParen.type != TokenType::LParen) {
-                        throwError("Expected '(' after the function name.", LParen, numLine);
-                        break;
-                    }
-
-                    //Iterate over all the Parameters in the ()
-                    Token p = tokens[pos++];
-                    while (p.type != TokenType::LParen &&
-                            p.type != TokenType::RParen &&
-                            p.type != TokenType::LBrace &&
-                            p.type != TokenType::RBrace) {
-                        Token arg = p;
-                        if (arg.type != TokenType::Comma) {
-                            //std::cout << "DEBUGARG: " << arg.text << "\n";
-                            if (isTokenType(arg)) {
-                                throwError("This variable name is invalid", arg, numLine);
-                                break;
-                            }
-                            auto param = arg;
-                            params.push_back(param);
-                        }
-                        p = tokens[pos++];
-                    }
-                    pos--;
-                    Token RParen = tokens[pos++]; // )
-                    if (RParen.type != TokenType::RParen) {
-                        throwError("Expected ')' to close the function parameter list.", RParen, numLine);
-                        break;
-                    }
-
-
-                    //Check if Function has a {
-                    Token lBrace = tokens[pos++]; // {
-                    if (lBrace.type != TokenType::LBrace) {
-                        throwError("Expected '{' to begin the function body.", lBrace, numLine);
-                        break;
-                    }
-
-                    //Iterate over Function Body 
-                    int braceDepth = 1;
-                    while (braceDepth > 0) {
-                        Token b = tokens[pos++];
-
-                        if (b.type == TokenType::LBrace) {
-                            braceDepth++;
-                        }
-                        else if (b.type == TokenType::RBrace) {
-                            braceDepth--;
-                            if (braceDepth == 0)
-                                break;
-                        }
-
-                        funcBody.push_back(b);
-                    }
-
-                    //Register function in the unordered map 
-                    funcs[name.text] = {
-                        Layer,
-                        parent,
-                        name.text,
-                        params,
-                        funcBody
-                    };
-                    //Function is now ready to use
+                    pos = registerFunc(tokens, pos, Layer, parent, numLine);
                 }
 
                 else if (t.type == TokenType::NewClass) {
@@ -8703,6 +8903,13 @@ namespace GeistScript {
                     }
 
                     std::vector<Token> classBody;
+
+                    classes[name.text] = {
+                        name.text,
+                        parent,
+                        layer + 1,
+                    };
+
                     Token lBrace = tokens[pos++];
                     if (lBrace.type != TokenType::LBrace) {
                         throwError("Expected '{' to begin the class body.", lBrace, numLine);
@@ -8711,7 +8918,10 @@ namespace GeistScript {
 
                     int braceDepth = 1;
                     while (braceDepth > 0) {
+                        size_t tmpPos = pos;
+                        tmpPos++;
                         Token b = tokens[pos++];
+                        Token innerName = tokens[tmpPos++];
 
                         if (b.type == TokenType::LBrace) {
                             braceDepth++;
@@ -8722,16 +8932,34 @@ namespace GeistScript {
                                 break;
                         }
 
-                        classBody.push_back(b);
+                        else if (b.text == name.text) {
+                            pos = registerFunc(tokens, pos, layer + 1, name.text, numLine, true);
+                            std::cout << "DEBUG: Name of the Constructor is " << name.text << "\n";
+                        }
+
+                        else if (b.type == TokenType::Function) {
+                            pos = registerFunc(tokens, pos, layer + 1, name.text, numLine);
+                            std::cout << "DEBUG: Name of the Function is " << innerName.text << "\n";
+                        } 
+
+                        else if (b.type == TokenType::Let || 
+                                b.type == TokenType::Const || 
+                                isVarName(b)) {
+                            pos = registerVar(tokens, pos, layer + 1, name.text, numLine, b);
+                            std::cout << "DEBUG: Name of the Variable is " << innerName.text << "\n";
+                        }
                     }
 
-                    classes[name.text] = {
-                        name.text,
-                        {},
-                        {}
-                    };
+                    //executeTokens(classBody, name.text, layer + 1, numLine);
+                }
 
-                    executeTokens(classBody, name.text, Layer + 1, numLine);
+                else if ((t.type == TokenType::Let || 
+                        t.type == TokenType::Const ||
+                        isVarName(t)) && 
+                        !isFuncName(t) &&
+                        t.type != TokenType::Function) {
+                    std::cout << "DEBUGT:" << t.text << "\n";
+                    pos = registerVar(tokens, pos, Layer, parent, numLine, t);
                 }
 
                 else {
@@ -8810,7 +9038,7 @@ void cmd_script(const std::vector<std::string>& args, Terminal& term) {
 
         while (std::getline(file, line)) {
             interp.geistScriptCode.push_back(line);
-            script += line + "-nl" + "\n";
+            script += line + "\n";
             lineNumber++;
             numLine++;
         }
