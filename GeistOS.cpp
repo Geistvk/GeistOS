@@ -7374,8 +7374,9 @@ namespace GeistScript {
                     */
 
             if (isClassName({TokenType::Empty, parent}) && !isConstructor) {
+                Token funcName = tokens[pos++];
                 isClassFunc = true;
-                func = classes[parent].functions[t.text].func;
+                func = classes[parent].functions[funcName.text].func;
             } else if (isClassName({TokenType::Empty, parent}) && isConstructor) {
                 isClassFunc = true;
                 func = classes[parent].functions["constructor"].func;
@@ -7392,6 +7393,7 @@ namespace GeistScript {
             }
 
             Token LParen = tokens[pos++];
+            if (isConstructor) LParen = tokens[pos++];
             if (LParen.type != TokenType::LParen) {
                 throwError("Expected '(' after the function name.", LParen, numLine);
                 return pos;
@@ -7407,7 +7409,7 @@ namespace GeistScript {
                     //std::cout << "DEBUGARG: " << arg.text << "\n";
                     if (isTokenType(arg) && 
                         arg.type != TokenType::Number &&
-                        arg.type == TokenType::StringLiteral) {
+                        arg.type != TokenType::StringLiteral) {
                         throwError("The variable name is invalid.", arg, numLine);
                         return pos;
                     }
@@ -7475,7 +7477,8 @@ namespace GeistScript {
                                                                     newLayer, 
                                                                     isConst, 
                                                                     varStr, 
-                                                                    varNum);
+                                                                    varNum, 
+                                                                    {TokenType::Empty, parent});
             }
 
             run(func.body, func.name, newLayer, numLine);
@@ -7801,13 +7804,33 @@ namespace GeistScript {
             return values.back();
         }
 
-        Arithmetic initilaizeArithmetic(std::vector<Token> tokens, size_t pos, std::string parent, int Layer, int numLine) {
+        Arithmetic initilaizeArithmetic(
+            std::vector<Token> tokens, 
+            size_t pos, 
+            std::string parent, 
+            int Layer, 
+            int numLine, 
+            Token className = {TokenType::Empty, "root"},
+            Token varName = {TokenType::Empty, ""}
+        ) {
             std::vector<Token> operations;
 
             Token val = tokens[pos++];
             while (val.type != TokenType::Semicolon) {
                 Token operation = val;
-                if (isVarName(val) || isLocalVarName(parent, val) || isFuncName(val)) {
+                //std::cout << "DEBUGN: " << val.text << "\n";
+                //std::cout << "DEBUGP: " << parent << "\n";
+                //std::cout << "DEBUGC: " << className.text << "\n";
+                //std::cout << "DEBUGV: " << val.text << "\n";
+                //std::cout << "DEBUGV: " << varName.text << "\n";
+                //std::cout << "DEBUG?: " << (isClassVariable(className, val) ? "ClassVar" : "NoClassVar") << "\n";
+                //std::cout << "DEBUG?: " << (isClassVariable({TokenType::Empty, parent}, val) ? "ClassVar" : "NoClassVar") << "\n";
+                if (isVarName(val) || 
+                    isLocalVarName(parent, val) || 
+                    isFuncName(val) || 
+                    isClassVariable({TokenType::Empty, parent}, val) || 
+                    isClassVariable(className, val)
+                ) {
                     Value var;
                     if (isVarName(val))
                         var = vars[val.text];
@@ -7818,6 +7841,10 @@ namespace GeistScript {
                         var = tokenToValue(ret.val);
                         pos = ret.newPos;
                         pos--;
+                    } else if (isClassVariable({TokenType::Empty, parent}, val)) {
+                        var = classes[parent].variables[val.text].value;
+                    } else if (isClassVariable(className, val)) {
+                        var = classes[className.text].variables[val.text].value;
                     }
 
                     if (var.isString) {
@@ -8108,7 +8135,8 @@ namespace GeistScript {
             const int Layer, 
             std::string parent, 
             int numLine,
-            Token t
+            Token t,
+            Token classOutName = {TokenType::Empty, "root"}
         ) {
             bool isConst = false;
             std::string par = parent;
@@ -8117,7 +8145,8 @@ namespace GeistScript {
             std::string varStr = "";
             long long varNum = 0;
 
-            if (!isVarName(t) && !isLocalVarName(parent, t)) {
+            if (!isVarName(t) && !isLocalVarName(parent, t) && 
+                !isClassVariable({TokenType::Empty, parent}, t)) {
                 if (t.type == TokenType::Const)
                     isConst = true;
                 name = tokens[pos++];
@@ -8130,14 +8159,15 @@ namespace GeistScript {
                         (isLocalVarName(parent, t) && funcs[parent].localVars[t.text].isConst)) {
                 throwError("Cannot modify the value of a constant.", combine({t, name}), numLine);
                 return pos;
-            } else if (isClassName({TokenType::Empty, parent})) {
+            } else if (isClassVariable({TokenType::Empty, parent}, t) && 
+                        t.type != TokenType::Let && t.type != TokenType::Const) {
                 Token dot = tokens[pos++];
                 if (dot.type != TokenType::Dot) {
                     throwError("Expected '.' after the class name.", dot, numLine);
                     return pos;
                 }
 
-                if (isClassVariable(t, tokens[pos])) {
+                if (isClassVariable({TokenType::Empty, parent}, t)) {
                     name = t;
                     par = t.text;
                     lay = Layer;
@@ -8153,6 +8183,9 @@ namespace GeistScript {
                 } else if (isLocalVarName(parent, t)) {
                     par = funcs[parent].localVars[t.text].parent;
                     lay = funcs[parent].localVars[t.text].layer;
+                } else if (isClassName({TokenType::Empty, parent})) {
+                    par = classes[parent].variables[t.text].value.parent;
+                    lay = classes[parent].variables[t.text].value.layer;
                 }
             }
 
@@ -8167,8 +8200,6 @@ namespace GeistScript {
                 if (tokens[pos].type == TokenType::New) {
                     pos++; // new
                     Token className = tokens[pos++];
-
-                    std::cout << "This code runs\n";
 
                     if (!isClassName(className)) {
                         throwError("Unknown class.", className, numLine);
@@ -8207,7 +8238,7 @@ namespace GeistScript {
 
                     return pos;
                 } else {
-                    Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent, Layer, numLine);
+                    Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent, Layer, numLine, classOutName, name);
                     Token val = arithmetic.val;
                     pos = arithmetic.newPos--;
 
@@ -8298,7 +8329,7 @@ namespace GeistScript {
                     return pos;
                 }
 
-                Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent, Layer, numLine);
+                Arithmetic arithmetic = initilaizeArithmetic(tokens, pos, parent, Layer, numLine, classOutName, name);
                 pos = arithmetic.newPos--;
 
                 if (op.type == TokenType::Plus) {
@@ -8374,10 +8405,10 @@ namespace GeistScript {
 
             //Check if Function Name is valid
             Token name;
-            if (isConstructor) name = tokens[pos];
+            if (isConstructor) name = {TokenType::Empty, parent};
             else  name = tokens[pos++];
 
-            if (isTokenType(name)) {
+            if (isTokenType(name) && !isConstructor) {
                 throwError("The function name is invalid.", name, numLine);
                 return pos;
             } else if (isFuncName(name)) {
@@ -8451,6 +8482,11 @@ namespace GeistScript {
                     {Layer, parent, name.text, params, funcBody},
                     AccessModifier::Public
                 };
+            else if (isClassName({TokenType::Empty, parent}))
+                classes[parent].functions[name.text] = {
+                    {Layer, parent, name.text, params, funcBody},
+                    AccessModifier::Private
+                };
             else if (parent == "root" || isFuncName({TokenType::Empty, parent}))
                 funcs[name.text] = {
                     Layer,
@@ -8458,11 +8494,6 @@ namespace GeistScript {
                     name.text,
                     params,
                     funcBody
-                };
-            else if (isClassName({TokenType::Empty, parent}))
-                classes[parent].functions[name.text] = {
-                    {Layer, parent, name.text, params, funcBody},
-                    AccessModifier::Private
                 };
             //Function is now ready to use
 
@@ -8533,15 +8564,17 @@ namespace GeistScript {
                     pos = executeFunction(t, Layer, parent, numLine, tokens, pos);
                 }
 
-                if (isClassName(vars[t.text].className)) {
+                else if (isClassName(vars[t.text].className)) {
+                    Token clsName = vars[t.text].className;
                     Token dot = tokens[pos++];
                     if (dot.type != TokenType::Dot) {
                         throwError("Expected '.' after the class name.", dot, numLine);
                         break;
                     }
 
-                    if (isClassFunction(t, tokens[pos])) {
-                        pos = executeFunction(t, layer + 1, t.text, numLine, tokens, pos);
+                    Token func = tokens[pos];
+                    if (isClassFunction(clsName, func)) {
+                        pos = executeFunction(clsName, layer + 1, clsName.text, numLine, tokens, pos);
                     } else {
                         throwError("Expected a class function after the class name.", tokens[pos], numLine);
                         break;
@@ -8934,23 +8967,19 @@ namespace GeistScript {
 
                         else if (b.text == name.text) {
                             pos = registerFunc(tokens, pos, layer + 1, name.text, numLine, true);
-                            std::cout << "DEBUG: Name of the Constructor is " << name.text << "\n";
                         }
 
                         else if (b.type == TokenType::Function) {
                             pos = registerFunc(tokens, pos, layer + 1, name.text, numLine);
-                            std::cout << "DEBUG: Name of the Function is " << innerName.text << "\n";
                         } 
 
                         else if (b.type == TokenType::Let || 
                                 b.type == TokenType::Const || 
                                 isVarName(b)) {
-                            pos = registerVar(tokens, pos, layer + 1, name.text, numLine, b);
-                            std::cout << "DEBUG: Name of the Variable is " << innerName.text << "\n";
+                            std::cout << "CLASS: " << name.text << "\n";
+                            pos = registerVar(tokens, pos, layer + 1, name.text, numLine, b, name);
                         }
                     }
-
-                    //executeTokens(classBody, name.text, layer + 1, numLine);
                 }
 
                 else if ((t.type == TokenType::Let || 
@@ -8958,7 +8987,7 @@ namespace GeistScript {
                         isVarName(t)) && 
                         !isFuncName(t) &&
                         t.type != TokenType::Function) {
-                    std::cout << "DEBUGT:" << t.text << "\n";
+                    //std::cout << "DEBUGT:" << t.text << "\n";
                     pos = registerVar(tokens, pos, Layer, parent, numLine, t);
                 }
 
