@@ -209,8 +209,11 @@ If you have ideas, improvements, or fixes, feel free to open an issue or submit 
 
 ## License
 
-MIT License
+This project is licensed under the [GNU General Public License v3.0](LICENSE).
 
+## Author
+
+Developed by [**Geistvk**](https://github.com/Geistvk)
 ---
 
 <p align="center">
